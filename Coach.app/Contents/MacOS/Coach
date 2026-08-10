@@ -50,10 +50,24 @@ open_page() {
 # copy was up, every relaunch took the shortcut and skipped the update. Fixes
 # would arrive in the folder and never be read. Pull first, decide after.
 BEFORE="$(head_sha)"
+WANTED=""
 if [ -d .git ]; then
+  /usr/bin/git fetch --quiet origin main >/dev/null 2>&1
+  WANTED="$(/usr/bin/git rev-parse origin/main 2>/dev/null)"
   /usr/bin/git pull --quiet --ff-only >/dev/null 2>&1
 fi
 AFTER="$(head_sha)"
+
+# A pull can fail quietly — no network, or a local edit to a file the update
+# also touches. Silence looked exactly like success for four rounds of this
+# build, so a refused update now says so out loud rather than nothing at all.
+if [ -n "$WANTED" ] && [ "$AFTER" != "$WANTED" ]; then
+  alert "There's a newer build I couldn't install.
+
+Usually that means no internet, or that a file I track has been edited by hand — memory/instructions.md is the likely one.
+
+I'll carry on with the version already here (${AFTER:0:7})."
+fi
 
 if running; then
   if [ "$BEFORE" = "$AFTER" ]; then
