@@ -19,6 +19,23 @@ alert() {   # the only way this app can talk to you
 
 running() { /usr/bin/curl -s -o /dev/null --max-time 1 "$URL"; }
 
+ask() {   # a real question, because ending a session is never my call
+  local msg="${1//\"/\'}"
+  /usr/bin/osascript -e "display dialog \"$msg\" with title \"The Socratic Coach\" buttons {\"Not now\", \"Restart\"} default button 2" 2>/dev/null | grep -q "Restart"
+}
+
+head_sha() { /bin/cat .git/refs/heads/main 2>/dev/null || echo none; }
+
+stop_running() {
+  # Ask it to stop the civilised way; insist if it's an older build that
+  # predates the Quit button.
+  /usr/bin/curl -s -o /dev/null --max-time 2 -X POST -H 'Content-Type: application/json' \
+    -d '{}' "${URL}quit" 2>/dev/null
+  sleep 1
+  running && /usr/bin/pkill -f 'coach\.py' 2>/dev/null
+  sleep 1
+}
+
 open_page() {
   # A Chrome app window has no address bar or tabs, which makes this feel like
   # a thing rather than a website. Falls back to whatever browser you use.
@@ -28,15 +45,35 @@ open_page() {
   open "$URL"
 }
 
-# Already thinking? Don't start a second one — just bring the page back.
-if running; then
-  open_page
-  exit 0
-fi
-
-# --- quietly take any newer build before starting -------------------------
+# --- update FIRST, always ---------------------------------------------------
+# This used to sit below the already-running check, which meant that once a
+# copy was up, every relaunch took the shortcut and skipped the update. Fixes
+# would arrive in the folder and never be read. Pull first, decide after.
+BEFORE="$(head_sha)"
 if [ -d .git ]; then
   /usr/bin/git pull --quiet --ff-only >/dev/null 2>&1
+fi
+AFTER="$(head_sha)"
+
+if running; then
+  if [ "$BEFORE" = "$AFTER" ]; then
+    open_page          # same build, already thinking — just bring it back
+    exit 0
+  fi
+  if ask "A newer build of the coach has arrived.
+
+Restart to use it? Anything you're part-way through will end."; then
+    stop_running
+    if running; then
+      alert "I couldn't stop the copy that's already running.
+
+Open Activity Monitor, search for coach.py, and quit it — then open me again."
+      exit 1
+    fi
+  else
+    open_page          # his call, not mine
+    exit 0
+  fi
 fi
 
 # macOS guards Documents, Desktop and Downloads. An app without a developer

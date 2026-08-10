@@ -54,12 +54,14 @@ def load_env(path=os.path.join(HERE, ".env")):
 ENV = load_env()
 
 _account = ENV.get("CLOUDFLARE_ACCOUNT_ID", "")
-if not _account or not _account.replace("-", "").isalnum():
+# Only reject what genuinely can't work in a URL path. Being fussier than
+# that risks refusing a perfectly good account id, which is a worse failure
+# than the one being prevented.
+if not _account or any(c in _account for c in " \t\"'<>#/?"):
     raise SystemExit(
-        "CLOUDFLARE_ACCOUNT_ID in .env doesn't look like an account id "
-        f"({_account[:4]}…{_account[-2:] if len(_account) > 6 else ''}). "
-        "It should be a run of letters and numbers, with no quotes, spaces "
-        "or trailing comment. Find it at dash.cloudflare.com under "
+        "CLOUDFLARE_ACCOUNT_ID in .env has something in it that can't go in a "
+        "web address — a quote, a space, or a trailing comment. It should be "
+        "just the id on its own. Find it at dash.cloudflare.com under "
         "Workers & Pages, in the right-hand sidebar.")
 
 ENDPOINT = ("https://api.cloudflare.com/client/v4/accounts/"
@@ -455,7 +457,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    SERVER = http.server.HTTPServer(("127.0.0.1", PORT), Handler)  # L8: local only
+    try:
+        SERVER = http.server.HTTPServer(("127.0.0.1", PORT), Handler)  # L8: local
+    except OSError as error:
+        raise SystemExit(
+            f"Port {PORT} is already taken, which almost always means another "
+            "copy of the coach is still running. Open its page at "
+            f"http://127.0.0.1:{PORT}/ and press Quit, then start this one."
+        ) from error
     # Coach.app opens the page itself (in a cleaner window), so it asks us not to.
     if not os.environ.get("COACH_NO_BROWSER"):
         threading.Timer(0.5, webbrowser.open, [f"http://127.0.0.1:{PORT}"]).start()
