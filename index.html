@@ -1,0 +1,132 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>The Socratic Coach</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  A window onto the agent, not the agent. Everything this page does is: show
+  what came back, take what you type, POST it to coach.py. All ten layers of
+  thinking happen in the Python. Deleting this file loses you a view, not a mind.
+-->
+<style>
+  :root {
+    --paper: #fbfaf8; --ink: #1a1a18; --muted: #6b6b66;
+    --line: #e6e3dd; --accent: #0e7490;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column; height: 100vh;
+  }
+  header {
+    padding: 18px 24px 14px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  }
+  h1 { margin: 0; font-size: 1rem; font-weight: 650; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-size: .82rem; }
+  #flag {
+    display: none; margin-left: auto; font-size: .74rem; font-weight: 700;
+    letter-spacing: .07em; text-transform: uppercase; color: #92400e;
+    background: #fef3c7; border: 1px solid #fde68a; border-radius: 999px;
+    padding: 4px 11px;
+  }
+  #log { flex: 1; overflow-y: auto; padding: 28px 24px 8px; }
+  .wrap { max-width: 620px; margin: 0 auto; }
+  .turn { margin: 0 0 26px; }
+  .who {
+    font-size: .68rem; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
+  }
+  .coach .what { font-size: 1.22rem; line-height: 1.45; letter-spacing: -.011em; }
+  .me .what { color: var(--muted); }
+  .flagged .what {
+    border-left: 3px solid #d97706; padding-left: 13px; font-size: 1rem;
+  }
+  .flagged .who { color: #92400e; }
+  footer { border-top: 1px solid var(--line); padding: 14px 24px 20px; }
+  form { max-width: 620px; margin: 0 auto; display: flex; gap: 10px; }
+  textarea {
+    flex: 1; resize: none; font: inherit; color: inherit; padding: 11px 14px;
+    background: #fff; border: 1px solid var(--line); border-radius: 10px;
+    min-height: 48px; max-height: 180px;
+  }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button {
+    font: inherit; font-weight: 600; padding: 0 20px; cursor: pointer;
+    background: var(--accent); color: #fff; border: 0; border-radius: 10px;
+  }
+  button:disabled { background: #b8b5ae; cursor: default; }
+  .thinking { color: var(--muted); font-style: italic; }
+</style>
+
+<header>
+  <h1>The Socratic Coach</h1>
+  <span class="sub">it asks · you answer · it never tells</span>
+  <span id="flag">off the record</span>
+</header>
+
+<div id="log"><div class="wrap" id="turns"></div></div>
+
+<footer>
+  <form id="form">
+    <textarea id="say" rows="1" placeholder="Type your reply…" autofocus></textarea>
+    <button id="send" type="submit">Send</button>
+  </form>
+</footer>
+
+<script>
+  const turns = document.getElementById('turns');
+  const form = document.getElementById('form');
+  const say = document.getElementById('say');
+  const send = document.getElementById('send');
+  const log = document.getElementById('log');
+
+  function add(who, what, cls = '') {
+    const el = document.createElement('div');
+    el.className = 'turn ' + cls;
+    el.innerHTML = '<div class="who"></div><div class="what"></div>';
+    el.querySelector('.who').textContent = who;
+    el.querySelector('.what').textContent = what;
+    turns.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+    return el;
+  }
+
+  async function speak(said) {
+    send.disabled = true;
+    const waiting = add('coach', 'thinking…', 'coach thinking');
+    try {
+      const res = await fetch('/say', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ said })
+      });
+      const move = await res.json();
+      waiting.remove();
+      add('coach', move.ask, 'coach' + (move.flagged ? ' flagged' : ''));
+      if (move.off_record) document.getElementById('flag').style.display = 'block';
+    } catch (err) {
+      waiting.remove();
+      add('coach', 'The coach isn\'t answering — is coach.py still running?',
+          'coach flagged');
+    }
+    send.disabled = false;
+    say.focus();
+  }
+
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const said = say.value.trim();
+    if (!said) return;
+    add('you', said, 'me');
+    say.value = '';
+    speak(said);
+  });
+
+  // Enter sends, Shift+Enter makes a new line — a coaching reply is short.
+  say.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }
+  });
+
+  speak('');   // the opening question — L4's first lap
+</script>

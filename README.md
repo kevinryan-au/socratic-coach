@@ -72,20 +72,28 @@ layers buys.
 
 ## Build phases
 
-- [ ] **Phase 1 — L0 speaks.** Cloudflare account, token, `.env`, and a ten-line script that
-      asks one question and prints the answer.
-- [ ] **Phase 2 — the loop and the app.** `coach.py` + `index.html`: context assembly (L1),
+- [x] **Phase 1 — L0 speaks.** Cloudflare account, token, `.env`, and a ten-line script that
+      asks one question and prints the answer. **Done** — the model answered from Python.
+- [x] **Phase 2 — the loop and the app.** `coach.py` + `index.html`: context assembly (L1),
       three tools (L2), running them (L3), the loop (L4). A full session in the browser.
+- [x] **Phase 6 — the launcher.** `Start Coach.command`, double-clickable. Built out of
+      order, on purpose: without it, running the coach means typing terminal commands, and
+      the whole point is that it shouldn't.
 - [ ] **Phase 3 — memory (L5).** Sessions leave summaries and stuck-patterns behind, and the
       next one opens with a callback to the last.
 - [ ] **Phase 4 — hardening (L4 + L8).** Advice gets bounced; off-record leaves no trace; a
       cap on consecutive model calls; the server binds to localhost only.
 - [ ] **Phase 5 — the second loop (L9).** The coach proposes one edit to its own
       instructions. It only changes if I approve it.
-- [ ] **Phase 6 — the launcher.** `Start Coach.command`, double-clickable.
-
 L6 (planning) and L7 (delegation) are deliberately not built. A coach that plans ahead or
 hands off isn't a coach.
+
+## How new builds arrive
+
+`Start Coach.command` runs `git pull` before it starts the coach. So double-clicking it
+both updates the code and runs it — there's no separate "download the new version" step,
+and no terminal. If the pull fails (no internet, local edits), it says so and runs the
+version already on the Mac rather than refusing to start.
 
 ## What stays on this Mac
 
