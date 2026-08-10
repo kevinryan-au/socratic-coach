@@ -55,6 +55,43 @@ class Unreachable(Exception):
     """L0 is somewhere else, so it can be unreachable. Say so in English."""
 
 
+def extract_text(payload):
+    """Workers AI does not always answer in the same shape — result.response
+    can be a string, an object, or a list of content parts depending on the
+    model and the day. Everything downstream assumes text, so this is the one
+    place that copes, and it always returns a string."""
+    if not payload.get("success", True):
+        errors = payload.get("errors") or [{"message": "unknown error"}]
+        raise Unreachable("Cloudflare said no: "
+                          + "; ".join(e.get("message", str(e)) for e in errors))
+
+    result = payload.get("result", payload)
+    if isinstance(result, str):
+        return result
+
+    for key in ("response", "output_text", "text", "content"):
+        value = result.get(key) if isinstance(result, dict) else None
+        if isinstance(value, str) and value.strip():
+            return value
+        if isinstance(value, dict):
+            inner = value.get("content") or value.get("text")
+            return inner if isinstance(inner, str) else json.dumps(value)
+        if isinstance(value, list):   # [{"type": "text", "text": "..."}]
+            parts = [p.get("text", "") if isinstance(p, dict) else str(p)
+                     for p in value]
+            if "".join(parts).strip():
+                return "".join(parts)
+
+    # the OpenAI-compatible shape, in case the endpoint starts answering that way
+    choices = result.get("choices") if isinstance(result, dict) else None
+    if isinstance(choices, list) and choices:
+        message = choices[0].get("message") or {}
+        if isinstance(message.get("content"), str):
+            return message["content"]
+
+    return json.dumps(result)   # never a non-string, whatever arrived
+
+
 def ask_model(messages, max_tokens=300):
     """One call to L0. Deliberately no retries: a retry loop could spend the
     day's free neurons in a spiral, and free is a hard constraint."""
@@ -65,7 +102,7 @@ def ask_model(messages, max_tokens=300):
     })
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
-            return json.load(response)["result"]["response"]
+            return extract_text(json.load(response))
     except urllib.error.HTTPError as error:
         detail = error.read().decode("utf-8", "replace").lower()
         if error.code in (402, 429) or "limit" in detail or "quota" in detail:
@@ -195,11 +232,15 @@ MAX_NUDGES = 2   # tries to get a question back before we show it flagged
 
 def parse_move(raw):
     """The strict envelope, leniently found. Models like to add a sentence
-    either side of their JSON; that's cosmetic, so we don't punish it."""
+    either side of their JSON, and sometimes a ```json fence; that's cosmetic,
+    so we don't punish it."""
+    if not isinstance(raw, str):
+        return None
     try:
-        return json.loads(raw[raw.index("{"):raw.rindex("}") + 1])
+        found = json.loads(raw[raw.index("{"):raw.rindex("}") + 1])
     except (ValueError, json.JSONDecodeError):
         return None
+    return found if isinstance(found, dict) else None
 
 
 def is_question(text):
@@ -245,6 +286,9 @@ def take_turn(state):
 # list. Off-record words never reach the model that writes the summary, so they
 # cannot leak into it.
 def remember(state, message):
+    # Content is always text. One non-string in here poisons every later call,
+    # because the whole list gets sent back to L0 next turn.
+    message = {**message, "content": str(message.get("content", ""))}
     state["session"].append(message)
     if not state["off_record"]:
         state["recordable"].append(message)
@@ -295,6 +339,7 @@ def apply_edit(edit):
 
 
 STATE = {"session": [], "recordable": [], "notes": [], "off_record": False}
+SERVER = None   # set in __main__; the page needs a way to switch it off
 
 
 # --- L3 + L8: the page, and the walls --------------------------------------
@@ -334,6 +379,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 ok = apply_edit(self._body().get("edit") or {})
                 self._send(200, json.dumps({"applied": ok,
                                             "style": read_file(STYLE)}))
+            elif self.path == "/quit":
+                # The window is the app, so quitting belongs in the window.
+                self._send(200, json.dumps({"stopped": True}))
+                threading.Thread(target=SERVER.shutdown, daemon=True).start()
             else:
                 self._send(404, json.dumps({"ask": "no such thing"}))
         except (DailyLimit, Unreachable) as known:
@@ -347,9 +396,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = http.server.HTTPServer(("127.0.0.1", PORT), Handler)  # L8: local only
+    SERVER = http.server.HTTPServer(("127.0.0.1", PORT), Handler)  # L8: local only
     # Coach.app opens the page itself (in a cleaner window), so it asks us not to.
     if not os.environ.get("COACH_NO_BROWSER"):
         threading.Timer(0.5, webbrowser.open, [f"http://127.0.0.1:{PORT}"]).start()
     print(f"The coach is listening on http://127.0.0.1:{PORT}   (Ctrl-C to stop)")
-    server.serve_forever()
+    SERVER.serve_forever()

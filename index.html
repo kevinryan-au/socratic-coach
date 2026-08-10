@@ -33,12 +33,14 @@
     display: none; color: var(--warn-ink);
     background: var(--warn-bg); border: 1px solid var(--warn-line);
   }
-  #done {
-    margin-left: auto; font: inherit; font-size: .82rem; color: var(--muted);
+  #done, #quit {
+    font: inherit; font-size: .82rem; color: var(--muted);
     background: none; border: 1px solid var(--line); border-radius: 8px;
     padding: 5px 13px; cursor: pointer;
   }
-  #done:hover { color: var(--ink); border-color: var(--muted); }
+  #done { margin-left: auto; }
+  #done:hover, #quit:hover { color: var(--ink); border-color: var(--muted); }
+  #quit { padding: 5px 11px; }
   #log { flex: 1; overflow-y: auto; padding: 28px 24px 8px; }
   .wrap { max-width: 620px; margin: 0 auto; }
   .turn { margin: 0 0 26px; }
@@ -101,6 +103,7 @@
   <span class="sub">it asks · you answer · it never tells</span>
   <span id="flag" class="pill">off the record</span>
   <button id="done" type="button">End session</button>
+  <button id="quit" type="button" title="Stop the coach running">Quit</button>
 </header>
 
 <div id="log"><div class="wrap" id="turns"></div></div>
@@ -240,6 +243,16 @@
     turns.appendChild(panel);
     scroll();
   }
+
+  // The app has no window of its own, so this is where quitting lives.
+  document.getElementById('quit').addEventListener('click', async () => {
+    try { await post('/quit'); } catch (e) { /* it stops mid-reply; expected */ }
+    document.body.innerHTML =
+      '<div style="margin:auto;color:#6b6b66;font:17px/1.6 -apple-system,sans-serif">' +
+      'The coach has stopped. You can close this window.</div>';
+    document.body.style.alignItems = 'center';
+    document.body.style.justifyContent = 'center';
+  });
 
   speak('');   // the opening question — L4's first lap
 </script>

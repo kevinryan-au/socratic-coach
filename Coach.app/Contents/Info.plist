@@ -22,5 +22,14 @@
 	<string>13.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<!--
+	  This app has no window of its own — the chat page in the browser is the
+	  window. Without this key macOS waits for one to appear and bounces the
+	  Dock icon forever. As an accessory app it launches, gets on with it, and
+	  stops pretending it's a Cocoa application. The icon you dragged to the
+	  Dock stays; it just no longer jumps.
+	-->
+	<key>LSUIElement</key>
+	<true/>
 </dict>
 </plist>
