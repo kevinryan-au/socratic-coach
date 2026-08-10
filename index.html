@@ -25,6 +25,10 @@
   }
   h1 { margin: 0; font-size: 1rem; font-weight: 650; letter-spacing: -.01em; }
   .sub { color: var(--muted); font-size: .82rem; }
+  .build {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .72rem; color: #a3a099;
+  }
   .pill {
     font-size: .7rem; font-weight: 700; letter-spacing: .07em;
     text-transform: uppercase; border-radius: 999px; padding: 4px 11px;
@@ -101,6 +105,7 @@
 <header>
   <h1>The Socratic Coach</h1>
   <span class="sub">it asks · you answer · it never tells</span>
+  <span class="sub build" id="build" title="which build is running"></span>
   <span id="flag" class="pill">off the record</span>
   <button id="done" type="button">End session</button>
   <button id="quit" type="button" title="Stop the coach running">Quit</button>
@@ -253,6 +258,13 @@
     document.body.style.alignItems = 'center';
     document.body.style.justifyContent = 'center';
   });
+
+  // Which build is running. The app updates itself without telling you,
+  // so this is the only way to answer "did that actually change anything?"
+  fetch('/build').then(r => r.json()).then(b => {
+    document.getElementById('build').textContent = 'build ' + b.build;
+    document.getElementById('build').title = 'model: ' + b.model;
+  }).catch(() => {});
 
   speak('');   // the opening question — L4's first lap
 </script>

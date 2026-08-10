@@ -31,20 +31,39 @@ MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
 
 
 def load_env(path=os.path.join(HERE, ".env")):
-    """Read .env into a dict. Its contents are never printed or logged (L8)."""
+    """Read .env into a dict. Its contents are never printed or logged (L8).
+
+    Tolerant about how the file was written: KEY=value, export KEY=value, and
+    values wrapped in quotes all mean the same thing. Quotes matter more than
+    they look — a quoted account id goes straight into the request URL and
+    comes back as a 400 that blames the request rather than the file."""
     env = {}
     with open(path) as handle:
         for line in handle:
             line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                key, value = line.split("=", 1)
-                env[key.strip()] = value.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            if key.startswith("export "):
+                key = key[len("export "):].strip()
+            env[key] = value.strip().strip("\"'").strip()
     return env
 
 
 ENV = load_env()
+
+_account = ENV.get("CLOUDFLARE_ACCOUNT_ID", "")
+if not _account or not _account.replace("-", "").isalnum():
+    raise SystemExit(
+        "CLOUDFLARE_ACCOUNT_ID in .env doesn't look like an account id "
+        f"({_account[:4]}…{_account[-2:] if len(_account) > 6 else ''}). "
+        "It should be a run of letters and numbers, with no quotes, spaces "
+        "or trailing comment. Find it at dash.cloudflare.com under "
+        "Workers & Pages, in the right-hand sidebar.")
+
 ENDPOINT = ("https://api.cloudflare.com/client/v4/accounts/"
-            f"{ENV['CLOUDFLARE_ACCOUNT_ID']}/ai/run/{MODEL}")
+            f"{_account}/ai/run/{MODEL}")
 
 
 class DailyLimit(Exception):
@@ -53,6 +72,18 @@ class DailyLimit(Exception):
 
 class Unreachable(Exception):
     """L0 is somewhere else, so it can be unreachable. Say so in English."""
+
+
+def why(detail):
+    """Pull the human sentence out of a Cloudflare error body."""
+    try:
+        errors = json.loads(detail).get("errors") or []
+        said = "; ".join(str(e.get("message", e)) for e in errors)
+        if said:
+            return said
+    except (ValueError, AttributeError):
+        pass
+    return (detail or "nothing at all").strip()[:300]
 
 
 def extract_text(payload):
@@ -104,15 +135,19 @@ def ask_model(messages, max_tokens=300):
         with urllib.request.urlopen(request, timeout=60) as response:
             return extract_text(json.load(response))
     except urllib.error.HTTPError as error:
-        detail = error.read().decode("utf-8", "replace").lower()
-        if error.code in (402, 429) or "limit" in detail or "quota" in detail:
+        detail = error.read().decode("utf-8", "replace")
+        lower = detail.lower()
+        if error.code in (402, 429) or "limit" in lower or "quota" in lower:
             raise DailyLimit("That's the free allowance for today — it resets "
                              "tomorrow. Same time, same coach.") from error
         if error.code in (401, 403):
             raise Unreachable("Cloudflare turned the key down. Check the two "
                               "values in .env — a token can be revoked or "
                               "expire.") from error
-        raise
+        # Everything else: Cloudflare said why. Passing on "Bad Request" and
+        # binning the reason is how you end up guessing at a fixable problem.
+        raise Unreachable(f"Cloudflare refused this (HTTP {error.code}). "
+                          f"It said: {why(detail)}") from error
     except urllib.error.URLError as error:
         raise Unreachable("Can't reach Cloudflare — the model lives there, so "
                           "there's nothing to ask until the connection is "
@@ -342,6 +377,25 @@ STATE = {"session": [], "recordable": [], "notes": [], "off_record": False}
 SERVER = None   # set in __main__; the page needs a way to switch it off
 
 
+def build_id():
+    """Which commit this code came from, read straight out of .git. The app
+    updates itself silently, so without this "did it update?" is unanswerable."""
+    try:
+        head = read_file(os.path.join(HERE, ".git", "HEAD")).strip()
+        if not head.startswith("ref: "):
+            return head[:7] or "unknown"
+        ref = head[5:].strip()
+        sha = read_file(os.path.join(HERE, ".git", ref)).strip()
+        if not sha:   # the ref may live in packed-refs instead of its own file
+            for line in read_file(os.path.join(HERE, ".git", "packed-refs")).splitlines():
+                if line.endswith(" " + ref):
+                    sha = line.split(" ")[0]
+                    break
+        return sha[:7] or "unknown"
+    except OSError:
+        return "unknown"
+
+
 # --- L3 + L8: the page, and the walls --------------------------------------
 # The page is a window onto the agent, not the agent. The server binds to
 # 127.0.0.1 only, so this is a thing on Kev's desk and not a thing on the web.
@@ -352,6 +406,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
+        # The app updates itself, so a cached page would quietly show you
+        # yesterday's build and there'd be no way to tell.
+        self.send_header("Cache-Control", "no-store, must-revalidate")
         self.end_headers()
         self.wfile.write(body)
 
@@ -363,6 +420,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self.path in ("/", "/index.html"):
             with open(os.path.join(HERE, "index.html"), "rb") as handle:
                 self._send(200, handle.read(), "text/html; charset=utf-8")
+        elif self.path == "/build":
+            self._send(200, json.dumps({"build": build_id(), "model": MODEL}))
         else:
             self._send(404, "not found", "text/plain")
 
