@@ -39,6 +39,30 @@ if [ -d .git ]; then
   /usr/bin/git pull --quiet --ff-only >/dev/null 2>&1
 fi
 
+# macOS guards Documents, Desktop and Downloads. An app without a developer
+# signature gets refused there — silently, with EPERM — even though Terminal
+# can read the very same files. Catch it here rather than letting python3
+# report it as a missing file, which is what it looks like from the inside.
+if [ ! -r coach.py ]; then
+  case "$COACH" in
+    "$HOME"/Documents/*|"$HOME"/Desktop/*|"$HOME"/Downloads/*)
+      alert "macOS won't let me read my own files.
+
+This folder is inside $(basename "$(dirname "$COACH")" 2>/dev/null || echo Documents), which macOS protects from apps that aren't signed by a registered developer. I'm not one — I'm a folder of Python you can read.
+
+The fix is to keep the coach somewhere unguarded. Move the 'AI Education' folder to your home folder (the one with your name on it) and open me again."
+      open "$HOME"
+      ;;
+    *)
+      alert "I can't read coach.py, and it sits right next to me.
+
+Either the file is missing, or macOS is denying access to this folder. Opening it now so you can see which."
+      open "$COACH"
+      ;;
+  esac
+  exit 1
+fi
+
 PY="$(command -v python3 2>/dev/null)"
 if [ -z "$PY" ]; then
   alert "The coach is a Python program, and python3 isn't installed on this Mac yet.
