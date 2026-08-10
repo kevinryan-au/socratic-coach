@@ -51,6 +51,10 @@ class DailyLimit(Exception):
     """The free allowance is spent. Not an error to retry — one to report."""
 
 
+class Unreachable(Exception):
+    """L0 is somewhere else, so it can be unreachable. Say so in English."""
+
+
 def ask_model(messages, max_tokens=300):
     """One call to L0. Deliberately no retries: a retry loop could spend the
     day's free neurons in a spiral, and free is a hard constraint."""
@@ -67,7 +71,15 @@ def ask_model(messages, max_tokens=300):
         if error.code in (402, 429) or "limit" in detail or "quota" in detail:
             raise DailyLimit("That's the free allowance for today — it resets "
                              "tomorrow. Same time, same coach.") from error
+        if error.code in (401, 403):
+            raise Unreachable("Cloudflare turned the key down. Check the two "
+                              "values in .env — a token can be revoked or "
+                              "expire.") from error
         raise
+    except urllib.error.URLError as error:
+        raise Unreachable("Can't reach Cloudflare — the model lives there, so "
+                          "there's nothing to ask until the connection is "
+                          "back.") from error
 
 
 # --- the constitution ------------------------------------------------------
@@ -324,8 +336,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                             "style": read_file(STYLE)}))
             else:
                 self._send(404, json.dumps({"ask": "no such thing"}))
-        except DailyLimit as limit:
-            self._send(200, json.dumps({"ask": str(limit), "flagged": True}))
+        except (DailyLimit, Unreachable) as known:
+            self._send(200, json.dumps({"ask": str(known), "flagged": True}))
         except Exception as error:  # never a wall of red Python in the page
             self._send(200, json.dumps({"ask": f"Something broke: {error}",
                                         "flagged": True}))
@@ -336,6 +348,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     server = http.server.HTTPServer(("127.0.0.1", PORT), Handler)  # L8: local only
-    threading.Timer(0.5, webbrowser.open, [f"http://127.0.0.1:{PORT}"]).start()
+    # Coach.app opens the page itself (in a cleaner window), so it asks us not to.
+    if not os.environ.get("COACH_NO_BROWSER"):
+        threading.Timer(0.5, webbrowser.open, [f"http://127.0.0.1:{PORT}"]).start()
     print(f"The coach is listening on http://127.0.0.1:{PORT}   (Ctrl-C to stop)")
     server.serve_forever()

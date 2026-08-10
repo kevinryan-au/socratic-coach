@@ -10,15 +10,22 @@ phase at a time, tagged in `coach.py` so the file reads as the stack.
 
 ## Running it
 
-Double-click **`Start Coach.command`**. A tab opens at http://127.0.0.1:8787.
+Double-click **`Coach.app`**. No terminal window, no commands — it appears in the Dock,
+opens the chat page, and quits when you quit it. Drag it to the Dock once and that's the
+only thing you ever touch.
 
-That file is a short shortcut, not magic — the long way round is the same thing:
+It also takes care of itself: on every launch it quietly pulls the newest build before
+starting, and if anything goes wrong — no keys, no Python, no internet — it says so in a
+normal Mac dialog rather than failing silently.
 
-```
-python3 coach.py
-```
+Two other ways in, for when you want to see the works:
 
-To stop it, close the Terminal window it opened.
+| | |
+|---|---|
+| `Start Coach.command` | The same thing as a visible shell script. A Terminal window opens and you can watch it run. |
+| `python3 coach.py` | The actual program. Everything above is a wrapper around this line. |
+
+To stop it: quit the app (or close the Terminal window, if you started it that way).
 
 ## What it depends on
 
@@ -135,9 +142,10 @@ coach/
 ├─ README.md              this file
 ├─ .env                   Cloudflare keys — never committed
 ├─ .env.example           the key names, no values
-├─ coach.py               the agent: L1, L2, L3, L4, L8
+├─ coach.py               the agent: L1, L2, L3, L4, L5, L8, L9
 ├─ index.html             the chat page — a window onto the agent, not the agent
-├─ Start Coach.command    double-click to start
+├─ Coach.app              the app: double-click this one
+├─ Start Coach.command    the same thing, as a visible script
 └─ memory/
    ├─ instructions.md     L9 — coaching style, evolves with my approval
    ├─ session-log.md      L5 — session summaries

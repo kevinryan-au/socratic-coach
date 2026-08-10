@@ -1,0 +1,88 @@
+#!/bin/zsh
+# The app that houses the coach.
+#
+# There is no Terminal window in front of this, which means nothing can be
+# printed at you — so every way this can go wrong ends in a Mac dialog box
+# instead. Same nine ideas as Start Coach.command, wrapped so it behaves like
+# an application: Dock icon, no black window, quits when you quit it.
+
+COACH="$(cd "$(dirname "$0")/../../.." && pwd)"   # the folder the app sits in
+cd "$COACH" || exit 1
+
+PORT=8787
+URL="http://127.0.0.1:$PORT/"
+
+alert() {   # the only way this app can talk to you
+  local msg="${1//\"/\'}"
+  /usr/bin/osascript -e "display dialog \"$msg\" with title \"The Socratic Coach\" buttons {\"OK\"} default button 1 with icon caution" >/dev/null 2>&1
+}
+
+running() { /usr/bin/curl -s -o /dev/null --max-time 1 "$URL"; }
+
+open_page() {
+  # A Chrome app window has no address bar or tabs, which makes this feel like
+  # a thing rather than a website. Falls back to whatever browser you use.
+  if [ -d "/Applications/Google Chrome.app" ]; then
+    open -na "Google Chrome" --args --app="$URL" >/dev/null 2>&1 && return 0
+  fi
+  open "$URL"
+}
+
+# Already thinking? Don't start a second one — just bring the page back.
+if running; then
+  open_page
+  exit 0
+fi
+
+# --- quietly take any newer build before starting -------------------------
+if [ -d .git ]; then
+  /usr/bin/git pull --quiet --ff-only >/dev/null 2>&1
+fi
+
+PY="$(command -v python3 2>/dev/null)"
+if [ -z "$PY" ]; then
+  alert "The coach is a Python program, and python3 isn't installed on this Mac yet.
+
+Opening the Terminal and running:  xcode-select --install
+will install it. It's a one-off."
+  exit 1
+fi
+
+if [ ! -f .env ]; then
+  alert "The coach has no keys, so it can't reach the model.
+
+There's a file called .env.example in the folder I'm about to open. Copy it to .env and put your two Cloudflare values in it."
+  open "$COACH"
+  exit 1
+fi
+
+# --- start it, and watch long enough to catch a birth defect --------------
+ERRLOG="$(mktemp -t coach)"
+COACH_NO_BROWSER=1 "$PY" coach.py >/dev/null 2>"$ERRLOG" &
+SERVER=$!
+
+for _ in {1..40}; do
+  running && break
+  kill -0 "$SERVER" 2>/dev/null || break
+  sleep 0.25
+done
+
+if ! running; then
+  alert "The coach couldn't start.
+
+$(/usr/bin/tail -c 700 "$ERRLOG")"
+  rm -f "$ERRLOG"
+  exit 1
+fi
+
+open_page
+wait "$SERVER"
+STATUS=$?
+
+# A non-zero exit means it fell over mid-session rather than being quit.
+if [ "$STATUS" -ne 0 ] && [ "$STATUS" -ne 143 ] && [ -s "$ERRLOG" ]; then
+  alert "The coach stopped unexpectedly.
+
+$(/usr/bin/tail -c 700 "$ERRLOG")"
+fi
+rm -f "$ERRLOG"
