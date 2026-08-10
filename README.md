@@ -76,17 +76,34 @@ layers buys.
       asks one question and prints the answer. **Done** — the model answered from Python.
 - [x] **Phase 2 — the loop and the app.** `coach.py` + `index.html`: context assembly (L1),
       three tools (L2), running them (L3), the loop (L4). A full session in the browser.
+- [x] **Phase 3 — memory (L5).** Ending a session writes a summary and any stuck-pattern,
+      and the next session opens carrying both.
+- [x] **Phase 4 — hardening (L4 + L8).** Advice gets bounced and re-asked; off-record leaves
+      no trace; a cap of five model calls without me; the server binds to localhost only.
+- [x] **Phase 5 — the second loop (L9).** The coach proposes one edit to its own
+      instructions, shown as a diff. It only changes if I click Approve.
 - [x] **Phase 6 — the launcher.** `Start Coach.command`, double-clickable. Built out of
       order, on purpose: without it, running the coach means typing terminal commands, and
       the whole point is that it shouldn't.
-- [ ] **Phase 3 — memory (L5).** Sessions leave summaries and stuck-patterns behind, and the
-      next one opens with a callback to the last.
-- [ ] **Phase 4 — hardening (L4 + L8).** Advice gets bounced; off-record leaves no trace; a
-      cap on consecutive model calls; the server binds to localhost only.
-- [ ] **Phase 5 — the second loop (L9).** The coach proposes one edit to its own
-      instructions. It only changes if I approve it.
+
 L6 (planning) and L7 (delegation) are deliberately not built. A coach that plans ahead or
 hands off isn't a coach.
+
+All six are written and tested. What none of it has done yet is meet the real model — every
+test used a stub. The first honest run is the first time I open it.
+
+## A session, start to finish
+
+1. Double-click **`Start Coach.command`**. A browser tab opens and the coach asks something.
+2. Answer. It asks again. It cannot do anything else — if it states rather than asks, the
+   code re-prompts it twice and then shows the reply flagged in amber.
+3. Say you want to go off the record and it stops recording, permanently for that session.
+   An amber pill appears in the header. Nothing after that point is written down, and none
+   of it is shown to the model that writes the summary.
+4. Click **End session** when you're done — only you can end it. It writes a summary and,
+   if it noticed one, a stuck-pattern.
+5. It then proposes **one** change to its own coaching style, as a diff, with Approve and
+   Veto. Approve rewrites `memory/instructions.md`. Veto writes nothing.
 
 ## How new builds arrive
 
@@ -127,5 +144,5 @@ coach/
    └─ stuck-patterns.md   L5 — where I get stuck
 ```
 
-Files below `coach.py` in that list arrive in their own phase. Nothing is stubbed out ahead
-of time — the point is watching each layer appear.
+`session-log.md` and `stuck-patterns.md` don't exist until the first session ends — the
+coach creates them. Everything else is there from the clone.

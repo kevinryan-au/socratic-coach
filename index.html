@@ -4,13 +4,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!--
   A window onto the agent, not the agent. Everything this page does is: show
-  what came back, take what you type, POST it to coach.py. All ten layers of
-  thinking happen in the Python. Deleting this file loses you a view, not a mind.
+  what came back, take what you type, POST it to coach.py. All the thinking
+  happens in the Python. Deleting this file loses you a view, not a mind.
 -->
 <style>
   :root {
     --paper: #fbfaf8; --ink: #1a1a18; --muted: #6b6b66;
     --line: #e6e3dd; --accent: #0e7490;
+    --warn-ink: #92400e; --warn-bg: #fef3c7; --warn-line: #fde68a;
   }
   * { box-sizing: border-box; }
   body {
@@ -24,12 +25,20 @@
   }
   h1 { margin: 0; font-size: 1rem; font-weight: 650; letter-spacing: -.01em; }
   .sub { color: var(--muted); font-size: .82rem; }
-  #flag {
-    display: none; margin-left: auto; font-size: .74rem; font-weight: 700;
-    letter-spacing: .07em; text-transform: uppercase; color: #92400e;
-    background: #fef3c7; border: 1px solid #fde68a; border-radius: 999px;
-    padding: 4px 11px;
+  .pill {
+    font-size: .7rem; font-weight: 700; letter-spacing: .07em;
+    text-transform: uppercase; border-radius: 999px; padding: 4px 11px;
   }
+  #flag {
+    display: none; color: var(--warn-ink);
+    background: var(--warn-bg); border: 1px solid var(--warn-line);
+  }
+  #done {
+    margin-left: auto; font: inherit; font-size: .82rem; color: var(--muted);
+    background: none; border: 1px solid var(--line); border-radius: 8px;
+    padding: 5px 13px; cursor: pointer;
+  }
+  #done:hover { color: var(--ink); border-color: var(--muted); }
   #log { flex: 1; overflow-y: auto; padding: 28px 24px 8px; }
   .wrap { max-width: 620px; margin: 0 auto; }
   .turn { margin: 0 0 26px; }
@@ -42,7 +51,8 @@
   .flagged .what {
     border-left: 3px solid #d97706; padding-left: 13px; font-size: 1rem;
   }
-  .flagged .who { color: #92400e; }
+  .flagged .who { color: var(--warn-ink); }
+  .thinking { color: var(--muted); font-style: italic; }
   footer { border-top: 1px solid var(--line); padding: 14px 24px 20px; }
   form { max-width: 620px; margin: 0 auto; display: flex; gap: 10px; }
   textarea {
@@ -51,18 +61,46 @@
     min-height: 48px; max-height: 180px;
   }
   textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-  button {
+  button.send {
     font: inherit; font-weight: 600; padding: 0 20px; cursor: pointer;
     background: var(--accent); color: #fff; border: 0; border-radius: 10px;
   }
-  button:disabled { background: #b8b5ae; cursor: default; }
-  .thinking { color: var(--muted); font-style: italic; }
+  button.send:disabled { background: #b8b5ae; cursor: default; }
+
+  /* --- the closing panel: what was kept, and what it wants to become --- */
+  .panel {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px; margin: 0 0 26px;
+  }
+  .panel h2 {
+    margin: 0 0 10px; font-size: .7rem; font-weight: 750; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .panel p { margin: 0 0 12px; font-size: .95rem; }
+  .kept { font-size: .84rem; color: var(--muted); }
+  .diff {
+    font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: #f7f6f3; border-radius: 8px; padding: 11px 13px; margin: 4px 0 12px;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .diff .minus { color: #9f1239; }
+  .diff .plus { color: #14532d; }
+  .why { font-size: .87rem; color: var(--muted); margin: 0 0 14px; font-style: italic; }
+  .choose { display: flex; gap: 10px; }
+  .choose button {
+    font: inherit; font-size: .9rem; font-weight: 600; padding: 8px 18px;
+    border-radius: 9px; cursor: pointer; border: 1px solid var(--line);
+    background: #fff; color: var(--ink);
+  }
+  .choose .approve { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .settled { font-size: .9rem; color: var(--muted); margin: 0; }
 </style>
 
 <header>
   <h1>The Socratic Coach</h1>
   <span class="sub">it asks · you answer · it never tells</span>
-  <span id="flag">off the record</span>
+  <span id="flag" class="pill">off the record</span>
+  <button id="done" type="button">End session</button>
 </header>
 
 <div id="log"><div class="wrap" id="turns"></div></div>
@@ -70,7 +108,7 @@
 <footer>
   <form id="form">
     <textarea id="say" rows="1" placeholder="Type your reply…" autofocus></textarea>
-    <button id="send" type="submit">Send</button>
+    <button id="send" class="send" type="submit">Send</button>
   </form>
 </footer>
 
@@ -79,7 +117,11 @@
   const form = document.getElementById('form');
   const say = document.getElementById('say');
   const send = document.getElementById('send');
+  const done = document.getElementById('done');
+  const flag = document.getElementById('flag');
   const log = document.getElementById('log');
+
+  const scroll = () => { log.scrollTop = log.scrollHeight; };
 
   function add(who, what, cls = '') {
     const el = document.createElement('div');
@@ -88,26 +130,30 @@
     el.querySelector('.who').textContent = who;
     el.querySelector('.what').textContent = what;
     turns.appendChild(el);
-    log.scrollTop = log.scrollHeight;
+    scroll();
     return el;
+  }
+
+  async function post(path, payload) {
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    });
+    return res.json();
   }
 
   async function speak(said) {
     send.disabled = true;
     const waiting = add('coach', 'thinking…', 'coach thinking');
     try {
-      const res = await fetch('/say', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ said })
-      });
-      const move = await res.json();
+      const move = await post('/say', { said });
       waiting.remove();
       add('coach', move.ask, 'coach' + (move.flagged ? ' flagged' : ''));
-      if (move.off_record) document.getElementById('flag').style.display = 'block';
+      if (move.off_record) flag.style.display = 'inline-block';
     } catch (err) {
       waiting.remove();
-      add('coach', 'The coach isn\'t answering — is coach.py still running?',
+      add('coach', "The coach isn't answering — is its window still open?",
           'coach flagged');
     }
     send.disabled = false;
@@ -127,6 +173,73 @@
   say.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }
   });
+
+  // --- ending: only ever from this button. The coach can propose; you decide.
+  done.addEventListener('click', async () => {
+    done.disabled = send.disabled = true;
+    const waiting = add('coach', 'closing the session…', 'coach thinking');
+    const out = await post('/end');
+    waiting.remove();
+    closingPanel(out);
+  });
+
+  function closingPanel(out) {
+    const panel = document.createElement('div');
+    panel.className = 'panel';
+
+    const kept = out.off_record
+      ? 'You went off the record, so nothing from that point was written down — ' +
+        'and none of it was shown to the model that wrote this summary.'
+      : (out.wrote && out.wrote.length
+          ? 'Written to ' + out.wrote.join(' and ') + '.'
+          : 'Nothing worth keeping was written.');
+
+    panel.innerHTML = `
+      <h2>Session closed</h2>
+      <p class="summary"></p>
+      <p class="kept"></p>`;
+    panel.querySelector('.summary').textContent = out.summary || '(no summary)';
+    panel.querySelector('.kept').textContent = kept;
+
+    const edit = out.edit || {};
+    if (edit.add) {
+      const box = document.createElement('div');
+      box.innerHTML = `
+        <h2 style="margin-top:20px">It wants to change its own instructions</h2>
+        <div class="diff"></div>
+        <p class="why"></p>
+        <div class="choose">
+          <button class="approve">Approve</button>
+          <button class="veto">Veto</button>
+        </div>`;
+      const diff = box.querySelector('.diff');
+      if (edit.remove) {
+        const m = document.createElement('div');
+        m.className = 'minus'; m.textContent = '- ' + edit.remove;
+        diff.appendChild(m);
+      }
+      const p = document.createElement('div');
+      p.className = 'plus'; p.textContent = '+ ' + edit.add;
+      diff.appendChild(p);
+      box.querySelector('.why').textContent = edit.why || '';
+
+      box.querySelector('.approve').addEventListener('click', async () => {
+        await post('/approve', { edit });
+        box.innerHTML = '<p class="settled">Applied. ' +
+          'instructions.md has changed — that\'s the second loop closing.</p>';
+        scroll();
+      });
+      box.querySelector('.veto').addEventListener('click', () => {
+        box.innerHTML = '<p class="settled">Vetoed. Nothing was written, ' +
+          'and it will not ask again.</p>';
+        scroll();
+      });
+      panel.appendChild(box);
+    }
+
+    turns.appendChild(panel);
+    scroll();
+  }
 
   speak('');   // the opening question — L4's first lap
 </script>
