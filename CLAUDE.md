@@ -140,13 +140,19 @@ Kev works in 5-hour Max windows. Phases 1–2 fit in one sitting; 3–4 in anoth
 
 ## Added after the six phases
 
-**The works panel** — a spine and a trace, so the stack is watchable while it runs rather
-than only readable in the source. Not a layer of its own; instrumentation *of* the layers.
+**The works panel** — the loop drawn, and the path each turn took through it, so the stack
+is watchable while it runs rather than only readable in the source. Not a layer of its own;
+instrumentation *of* the layers.
 
 - Every layer calls `note(trace, ...)` as it acts. `coach.py` owns the whole description of
-  the stack (the `LAYERS` table, served at `/stack`) and every line of every trace.
-  `index.html` draws what it is sent and knows nothing about agents — same rule as before:
-  a window onto the agent, not the agent.
+  the stack (the `LAYERS` table, served at `/stack`, where each layer declares whether it
+  sits in the `loop`, at the `edge`, or is `unbuilt`) and every line of every trace.
+  `index.html` owns only the drawing — where boxes go, which way arrows point. It knows
+  nothing about agents: same rule as before, a window onto the agent, not the agent.
+- Show the loop as a loop. A list in L0–L9 order is a taxonomy, not a mechanism — it was
+  tried first and taught nothing, because execution order is L4→L1→L0→L4→L2, so the lights
+  jump around and the eye can't follow a path. Both back-edges rejoin at L1; drawing them
+  any other way would hide why the context is rebuilt every lap.
 - The trace is **RAM for one turn, then gone**. Never a file, never a log, never
   localStorage. While off-record the transcript is still sent to the model, so it appears in
   the L1 detail — persisting the trace anywhere would be a hole straight through L8's

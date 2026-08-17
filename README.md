@@ -122,37 +122,59 @@ test used a stub. The first honest run is the first time I open it.
 There's a panel down the right-hand side — **Hide the works** in the header turns it off,
 and it remembers which way you left it.
 
-The top half is the stack itself: L0 to L9, lighting up as each layer does something, with
-a running count of how many times it has fired this session. L6 and L7 sit there greyed out
-and struck through, saying why they aren't built. An absence you can see is a decision; an
-absence you can't is an oversight.
-
-The bottom half is the trace: every layer says, in one line, what it just did. A turn where
-the coach tried to give advice reads like this —
+The top half is the loop — the four layers that run, in order, every single turn:
 
 ```
-L4  lap — 1 of 5 allowed without you
-L1  assembled — 4,668 chars — constitution 808 · style 619 · log 2500 · stuck 68
-                · 9 msgs so far · session-log cut to the last 2500
-L0  answered — llama-3.3-70b-instruct-fp8-fast · 1.84s · 1420 tokens in, 24 out
-L4  parse — envelope found inside 29 chars of surrounding prose
-L4  bounced — not a question — nudging it, 1 of 2
-L4  lap — 2 of 5 allowed without you
-...
-L2  asked — the envelope came back as a question — that convention is L2
-L8  ledger — transcript 10 msgs · recordable 10 msgs
+                 you type a reply
+                        │
+        ┌──────▶  L1  assemble the context
+        │               │
+   ✗ nudged             ▼
+   L3 ran a tool  L0  ask the model
+                        │
+   up to 5 laps         ▼
+        │         L4  check the reply
+        └───────────────┤
+                        │ ✓ it asked something
+                        ▼
+                  L2  a question, in the envelope
+                        │
+                        ▼
+                    back to you
 ```
 
-That `bounced` line used to be invisible: the question-checker did its job silently, so the
-only ones I ever saw were the failures it couldn't fix. It is the house rule with its
-sleeves rolled up — the constitution *asks* for a question, and those six lines of Python
-*require* one.
+It lights up in order as each turn replays. The return curve is the part worth staring at:
+a nudge and a tool call *both* re-enter at L1, which is why the context gets rebuilt from
+scratch every lap, and why the tokens climb the way they do.
 
-Any line with a `⌄` opens. Click the `L1` line and you get the entire context that went to
-the model, verbatim — every character it could see before it wrote a word. Click `L0` and
-you get the raw reply, before anything parsed it.
+L5, L8 and L9 sit underneath as chips, because they touch a turn without being steps in it
+— L8 alongside every turn, L5 and L9 only at the close. L6 and L7 are named and greyed with
+their reason. An absence you can see is a decision; an absence you can't is an oversight.
 
-Two lines are worth watching in particular:
+The bottom half is one line per turn — the route that turn actually took:
+
+```
+TURN 1   1→0→4✓ → you                 1 lap  · 1.3s · 1,202 tok
+TURN 2   1→0→4✗ │ 1→0→4✓ → you        2 laps · 4.1s · 2,677 tok
+TURN 3   1→0→2→3 │ 1→0→4✓ → you       2 laps · 3.8s · 3,041 tok
+CLOSING THE SESSION   1→0→5→9                 4.1s · 2,196 tok
+```
+
+Each `│` is another lap round the loop. Turn 2 is the question-checker doing its job: the
+model stated instead of asking, `4✗` bounced it, and the whole loop ran again. That used to
+be completely invisible — the checker only ever surfaced the failures it *couldn't* fix.
+It's the house rule with its sleeves rolled up: the constitution *asks* for a question, and
+six lines of Python *require* one.
+
+Turn 3 is a tool call — `2→3`, the envelope asking and the code running it — which also
+costs a lap.
+
+**Click any turn** and the full trace opens underneath: every layer, in order, saying what
+it did in a sentence. Any of those lines with a `⌄` opens further — click `L1` and you get
+the entire context that went to the model, verbatim, every character it could see before it
+wrote a word. Click `L0` and you get the raw reply, before anything parsed it.
+
+Two of those lines are worth watching in particular:
 
 - **`L1 assembled`** — the number climbs every turn, because every turn re-sends the whole
   conversation. That is the free allowance draining, in real time, and it is why the memory

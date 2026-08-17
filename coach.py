@@ -38,39 +38,49 @@ PORT = 8787
 # L1 line's detail). So the trace lives in RAM for one turn, travels once to the
 # page, and is never written to a file, a log, or a header. Nothing in this file
 # persists it, and nothing should be added that does.
-def note(trace, layer, event, line, detail=""):
-    """Record one thing one layer did. A None trace means nobody's watching."""
+def note(trace, layer, event, line, detail="", data=None):
+    """Record one thing one layer did. A None trace means nobody's watching.
+
+    `data` is for numbers the page wants to add up rather than read — how long
+    a call took, what it cost. The sentence in `line` stays the thing a person
+    reads; nothing is ever parsed back out of it."""
     if trace is None:
         return
     trace.append({"layer": layer, "event": event, "line": line,
-                  "detail": str(detail)})
+                  "detail": str(detail), "data": data or {}})
 
 
 # --- the spine -------------------------------------------------------------
 # The stack itself, as data, so the page can draw it without knowing anything
-# about agents. L6 and L7 are in the list precisely because they aren't built:
-# a gap you can see is a design decision, a gap you can't is an oversight.
+# about agents. Each layer says WHERE it sits, which is the part worth seeing:
+#
+#   loop     it happens, in order, every single turn
+#   edge     it touches the turn without being a step in it
+#   unbuilt  it isn't here, and that was a decision
+#
+# L6 and L7 are in the list precisely because they aren't built: a gap you can
+# see is a design decision, a gap you can't is an oversight.
 LAYERS = [
-    ("L0", "Inference", True,
+    ("L0", "Inference", "loop",
      "Rented, stateless, and the only layer that isn't yours"),
-    ("L1", "Context assembly", True,
+    ("L1", "Context assembly", "loop",
      "Everything the model can see before it writes a word"),
-    ("L2", "Tool interface", True,
+    ("L2", "Tool interface", "loop",
      "Three tools, and the JSON envelope that asks for them"),
-    ("L3", "Execution", True,
+    ("L3", "Execution", "loop",
      "Doing it, then reporting back. You are the environment"),
-    ("L4", "Control loop", True,
+    ("L4", "Control loop", "loop",
      "Look, decide, act, look again — plus the question-checker"),
-    ("L5", "State & memory", True,
-     "Four lifespans: this turn, this session, the log, the style"),
-    ("L6", "Planning", False,
-     "On purpose — a coach that plans ahead isn't a coach"),
-    ("L7", "Delegation", False,
-     "On purpose — a coach that hands off isn't a coach"),
-    ("L8", "Governance", True,
-     "Localhost only, off-record is one-way, you hold the veto"),
-    ("L9", "Adaptation", True,
-     "The second loop: it proposes, you approve, the file changes"),
+    ("L5", "State & memory", "edge",
+     "Only at the close: what's worth keeping reaches disk"),
+    ("L6", "Planning", "unbuilt",
+     "a coach that plans ahead isn't a coach"),
+    ("L7", "Delegation", "unbuilt",
+     "a coach that hands off isn't a coach"),
+    ("L8", "Governance", "edge",
+     "Alongside every turn: what may be recorded, and what may not"),
+    ("L9", "Adaptation", "edge",
+     "Only at the close: it proposes, you approve, the file changes"),
 ]
 
 # --- L0: inference ---------------------------------------------------------
@@ -183,11 +193,11 @@ def spent(payload):
     result = payload.get("result")
     usage = result.get("usage") if isinstance(result, dict) else None
     if not isinstance(usage, dict):
-        return ""
+        return {}
     went, came = usage.get("prompt_tokens"), usage.get("completion_tokens")
     if went is None and came is None:
-        return ""
-    return f" · {went or 0} tokens in, {came or 0} out"
+        return {}
+    return {"in": went or 0, "out": came or 0}
 
 
 def ask_model(messages, max_tokens=300, trace=None):
@@ -203,9 +213,11 @@ def ask_model(messages, max_tokens=300, trace=None):
         with urllib.request.urlopen(request, timeout=60) as response:
             payload = json.load(response)
         text = extract_text(payload)
+        took, used = time.monotonic() - started, spent(payload)
         note(trace, "L0", "answered",
-             f"{MODEL.rsplit('/', 1)[-1]} · {time.monotonic() - started:.2f}s"
-             f"{spent(payload)}", text)
+             f"{MODEL.rsplit('/', 1)[-1]} · {took:.2f}s"
+             + (f" · {used['in']} tokens in, {used['out']} out" if used else ""),
+             text, {"ms": round(took * 1000), **used})
         return text
     except urllib.error.HTTPError as error:
         detail = error.read().decode("utf-8", "replace")
@@ -586,8 +598,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # The spine, as data. The page draws it and knows nothing else
             # about agents — the stack is defined here, where it's real.
             self._send(200, json.dumps([
-                {"id": i, "name": n, "built": b, "note": d}
-                for i, n, b, d in LAYERS]))
+                {"id": i, "name": n, "where": w, "note": d}
+                for i, n, w, d in LAYERS]))
         else:
             self._send(404, "not found", "text/plain")
 
