@@ -112,6 +112,57 @@ test used a stub. The first honest run is the first time I open it.
 5. It then proposes **one** change to its own coaching style, as a diff, with Approve and
    Veto. Approve rewrites `memory/instructions.md`. Veto writes nothing.
 
+## Watching it work
+
+There's a panel down the right-hand side — **Hide the works** in the header turns it off,
+and it remembers which way you left it.
+
+The top half is the stack itself: L0 to L9, lighting up as each layer does something, with
+a running count of how many times it has fired this session. L6 and L7 sit there greyed out
+and struck through, saying why they aren't built. An absence you can see is a decision; an
+absence you can't is an oversight.
+
+The bottom half is the trace: every layer says, in one line, what it just did. A turn where
+the coach tried to give advice reads like this —
+
+```
+L4  lap — 1 of 5 allowed without you
+L1  assembled — 4,668 chars — constitution 808 · style 619 · log 2500 · stuck 68
+                · 9 msgs so far · session-log cut to the last 2500
+L0  answered — llama-3.3-70b-instruct-fp8-fast · 1.84s · 1420 tokens in, 24 out
+L4  parse — envelope found inside 29 chars of surrounding prose
+L4  bounced — not a question — nudging it, 1 of 2
+L4  lap — 2 of 5 allowed without you
+...
+L2  asked — the envelope came back as a question — that convention is L2
+L8  ledger — transcript 10 msgs · recordable 10 msgs
+```
+
+That `bounced` line used to be invisible: the question-checker did its job silently, so the
+only ones I ever saw were the failures it couldn't fix. It is the house rule with its
+sleeves rolled up — the constitution *asks* for a question, and those six lines of Python
+*require* one.
+
+Any line with a `⌄` opens. Click the `L1` line and you get the entire context that went to
+the model, verbatim — every character it could see before it wrote a word. Click `L0` and
+you get the raw reply, before anything parsed it.
+
+Two lines are worth watching in particular:
+
+- **`L1 assembled`** — the number climbs every turn, because every turn re-sends the whole
+  conversation. That is the free allowance draining, in real time, and it is why the memory
+  files are cut to the last 2,500 characters.
+- **`L8 ledger`** — two counts that normally match. Go off the record and they stop
+  matching, and the gap between them is exactly the material the closing summary will never
+  be shown.
+
+**The trace is never written down.** Not to a file, not to a log, not to the browser's
+storage — only the show/hide preference is remembered. It lives in memory for one turn, goes
+to the page once, and is gone when the tab closes. It has to work that way: while I'm off
+the record the transcript is still being sent to the model, so it still appears in the `L1`
+detail. Anything that persisted the trace would be a hole straight through "off the record",
+so nothing does — and nothing should be added that does.
+
 ## How new builds arrive
 
 `Start Coach.command` runs `git pull` before it starts the coach. So double-clicking it

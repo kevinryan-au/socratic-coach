@@ -8,12 +8,17 @@ deliberately absent — a coach that plans ahead or hands off isn't a coach.
 House rule, visible throughout: behaviour you'd LIKE goes in the prompt;
 behaviour you REQUIRE goes in code. Where both appear for one rule, the code
 is the one that's load-bearing.
+
+Each layer also says what it just did, as it does it — see `note` below. Those
+lines go to the page beside the conversation, so the stack is something you
+watch working rather than something you take on trust.
 """
 
 import http.server
 import json
 import os
 import threading
+import time
 import urllib.error
 import urllib.request
 import webbrowser
@@ -22,6 +27,51 @@ from datetime import date
 HERE = os.path.dirname(os.path.abspath(__file__))
 MEM = os.path.join(HERE, "memory")
 PORT = 8787
+
+
+# --- the trace -------------------------------------------------------------
+# Every layer says, in one line, what it just did. The page draws these beside
+# the conversation so the machinery is watchable instead of inferred.
+#
+# L8 applies here as hard as anywhere: a trace can carry off-record words (the
+# transcript is still sent to the model while off-record, so it shows up in the
+# L1 line's detail). So the trace lives in RAM for one turn, travels once to the
+# page, and is never written to a file, a log, or a header. Nothing in this file
+# persists it, and nothing should be added that does.
+def note(trace, layer, event, line, detail=""):
+    """Record one thing one layer did. A None trace means nobody's watching."""
+    if trace is None:
+        return
+    trace.append({"layer": layer, "event": event, "line": line,
+                  "detail": str(detail)})
+
+
+# --- the spine -------------------------------------------------------------
+# The stack itself, as data, so the page can draw it without knowing anything
+# about agents. L6 and L7 are in the list precisely because they aren't built:
+# a gap you can see is a design decision, a gap you can't is an oversight.
+LAYERS = [
+    ("L0", "Inference", True,
+     "Rented, stateless, and the only layer that isn't yours"),
+    ("L1", "Context assembly", True,
+     "Everything the model can see before it writes a word"),
+    ("L2", "Tool interface", True,
+     "Three tools, and the JSON envelope that asks for them"),
+    ("L3", "Execution", True,
+     "Doing it, then reporting back. You are the environment"),
+    ("L4", "Control loop", True,
+     "Look, decide, act, look again — plus the question-checker"),
+    ("L5", "State & memory", True,
+     "Four lifespans: this turn, this session, the log, the style"),
+    ("L6", "Planning", False,
+     "On purpose — a coach that plans ahead isn't a coach"),
+    ("L7", "Delegation", False,
+     "On purpose — a coach that hands off isn't a coach"),
+    ("L8", "Governance", True,
+     "Localhost only, off-record is one-way, you hold the veto"),
+    ("L9", "Adaptation", True,
+     "The second loop: it proposes, you approve, the file changes"),
+]
 
 # --- L0: inference ---------------------------------------------------------
 # Rented, stateless, and the only layer that isn't yours. Nothing is installed
@@ -125,7 +175,22 @@ def extract_text(payload):
     return json.dumps(result)   # never a non-string, whatever arrived
 
 
-def ask_model(messages, max_tokens=300):
+def spent(payload):
+    """Workers AI usually reports what the call cost in tokens. When it does,
+    the trace says so — every turn re-sends the whole conversation, so watching
+    this number climb is watching the free allowance drain. Nothing depends on
+    it: if the field isn't there, the line just says less."""
+    result = payload.get("result")
+    usage = result.get("usage") if isinstance(result, dict) else None
+    if not isinstance(usage, dict):
+        return ""
+    went, came = usage.get("prompt_tokens"), usage.get("completion_tokens")
+    if went is None and came is None:
+        return ""
+    return f" · {went or 0} tokens in, {came or 0} out"
+
+
+def ask_model(messages, max_tokens=300, trace=None):
     """One call to L0. Deliberately no retries: a retry loop could spend the
     day's free neurons in a spiral, and free is a hard constraint."""
     body = json.dumps({"messages": messages, "max_tokens": max_tokens}).encode()
@@ -133,24 +198,36 @@ def ask_model(messages, max_tokens=300):
         "Authorization": f"Bearer {ENV['CLOUDFLARE_API_TOKEN']}",
         "Content-Type": "application/json",
     })
+    started = time.monotonic()
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
-            return extract_text(json.load(response))
+            payload = json.load(response)
+        text = extract_text(payload)
+        note(trace, "L0", "answered",
+             f"{MODEL.rsplit('/', 1)[-1]} · {time.monotonic() - started:.2f}s"
+             f"{spent(payload)}", text)
+        return text
     except urllib.error.HTTPError as error:
         detail = error.read().decode("utf-8", "replace")
         lower = detail.lower()
         if error.code in (402, 429) or "limit" in lower or "quota" in lower:
+            note(trace, "L0", "refused", "the day's free allowance is spent",
+                 why(detail))
             raise DailyLimit("That's the free allowance for today — it resets "
                              "tomorrow. Same time, same coach.") from error
         if error.code in (401, 403):
+            note(trace, "L0", "refused", "the key was turned down", why(detail))
             raise Unreachable("Cloudflare turned the key down. Check the two "
                               "values in .env — a token can be revoked or "
                               "expire.") from error
         # Everything else: Cloudflare said why. Passing on "Bad Request" and
         # binning the reason is how you end up guessing at a fixable problem.
+        note(trace, "L0", "refused", f"HTTP {error.code}", why(detail))
         raise Unreachable(f"Cloudflare refused this (HTTP {error.code}). "
                           f"It said: {why(detail)}") from error
     except urllib.error.URLError as error:
+        note(trace, "L0", "unreachable", "no answer from Cloudflare at all",
+             str(error))
         raise Unreachable("Can't reach Cloudflare — the model lives there, so "
                           "there's nothing to ask until the connection is "
                           "back.") from error
@@ -226,15 +303,33 @@ def append_file(path, text):
 # Everything the model can see before it writes a word: the constitution, the
 # coaching style, what it remembers of previous sessions, and the session so
 # far. "Context" is never more exotic than deciding what goes in this list.
-def build_messages(session):
+def build_messages(session, trace=None):
+    style, log, stuck = read_file(STYLE), read_file(LOG), read_file(STUCK)
+    log_tail = log[-MEMORY_TAIL:] or "None yet. This is the first."
+    stuck_tail = stuck[-MEMORY_TAIL:] or "Nothing noticed yet."
     system = (CONSTITUTION
               + "\n--- your coaching style (L9 — it evolves) ---\n"
-              + read_file(STYLE)
+              + style
               + "\n--- previous sessions (L5 — what you remember) ---\n"
-              + (read_file(LOG)[-MEMORY_TAIL:] or "None yet. This is the first.")
+              + log_tail
               + "\n--- where Kev tends to get stuck (L5) ---\n"
-              + (read_file(STUCK)[-MEMORY_TAIL:] or "Nothing noticed yet."))
-    return [{"role": "system", "content": system}] + session
+              + stuck_tail)
+    messages = [{"role": "system", "content": system}] + session
+
+    # The line says how big and out of what; the detail is the whole thing,
+    # verbatim. "What did it actually see?" should never need guessing at.
+    capped = [name for name, whole, tail
+              in (("session-log", log, log_tail), ("stuck-patterns", stuck, stuck_tail))
+              if len(whole) > len(tail)]
+    total = len(system) + sum(len(m["content"]) for m in session)
+    note(trace, "L1", "assembled",
+         f"{total:,} chars — constitution {len(CONSTITUTION)} · style {len(style)}"
+         f" · log {len(log_tail)} · stuck {len(stuck_tail)}"
+         f" · {len(session)} msgs so far"
+         + (f" · {' and '.join(capped)} cut to the last {MEMORY_TAIL}"
+            if capped else ""),
+         json.dumps(messages, indent=2))
+    return messages
 
 
 # --- L2: tool interface ----------------------------------------------------
@@ -247,15 +342,23 @@ TOOLS = ("save_note", "go_off_record", "end_session")
 # --- L3: execution / effectors ---------------------------------------------
 # The part that actually does it, then reports back. Note who the environment
 # is here: Kev. His typed reply is the "tool result" that comes back into L1.
-def run_tool(name, args, state):
+def run_tool(name, args, state, trace=None):
     if name == "save_note":
         state["notes"].append(args.get("note", ""))
+        note(trace, "L3", "ran save_note",
+             "kept for the closing call, not written to disk yet",
+             args.get("note", ""))
         return "noted"
     if name == "go_off_record":
         state["off_record"] = True          # L8: one-way. There is no going back on.
+        note(trace, "L8", "off the record",
+             "recording stopped — one way, no going back on")
         return "off the record from here — nothing more will be written down"
     if name == "end_session":
+        note(trace, "L3", "ran end_session",
+             "it can only propose; ending is Kev's button")
         return "ending proposed — Kev decides, not you"
+    note(trace, "L3", "refused", f"no such tool: {name}")
     return f"no such tool: {name}"
 
 
@@ -267,51 +370,78 @@ MAX_CALLS = 5    # consecutive calls without Kev — a spiral can't spend his da
 MAX_NUDGES = 2   # tries to get a question back before we show it flagged
 
 
-def parse_move(raw):
+def parse_move(raw, trace=None):
     """The strict envelope, leniently found. Models like to add a sentence
     either side of their JSON, and sometimes a ```json fence; that's cosmetic,
-    so we don't punish it."""
+    so we don't punish it — but the trace says when it happened, because
+    "how often does it wander off the envelope?" is worth being able to see."""
     if not isinstance(raw, str):
+        note(trace, "L4", "parse", "nothing text-shaped came back")
         return None
     try:
-        found = json.loads(raw[raw.index("{"):raw.rindex("}") + 1])
+        start, stop = raw.index("{"), raw.rindex("}") + 1
+        found = json.loads(raw[start:stop])
     except (ValueError, json.JSONDecodeError):
+        note(trace, "L4", "parse", "no JSON envelope in that reply", raw)
         return None
-    return found if isinstance(found, dict) else None
+    if not isinstance(found, dict):
+        note(trace, "L4", "parse", "JSON, but not an object", raw)
+        return None
+    spare = len(raw) - (stop - start)
+    note(trace, "L4", "parse",
+         "a clean envelope, nothing either side" if not spare
+         else f"envelope found inside {spare} chars of surrounding prose", raw)
+    return found
 
 
 def is_question(text):
     return text.strip().endswith("?")
 
 
-def take_turn(state):
+def take_turn(state, trace=None):
     """One turn: as many laps as the model needs, ending when it asks Kev
     something. The question-checker lives here — in code, not in the prompt."""
     nudges = 0
-    for _ in range(MAX_CALLS):
-        raw = ask_model(build_messages(state["session"]))
+    for lap in range(1, MAX_CALLS + 1):
+        note(trace, "L4", "lap", f"{lap} of {MAX_CALLS} allowed without you")
+        raw = ask_model(build_messages(state["session"], trace), trace=trace)
         remember(state, {"role": "assistant", "content": raw})
-        move = parse_move(raw)
+        move = parse_move(raw, trace)
 
         # L4: the question-checker. Not a tool call, not a question -> nudge.
+        # This is the house rule with its sleeves rolled up: the constitution
+        # ASKS for a question, and these six lines are what REQUIRE one.
         if move is None or ("ask" in move and not is_question(move["ask"])):
             if nudges < MAX_NUDGES:
                 nudges += 1
+                note(trace, "L4", "bounced",
+                     f"not a question — nudging it, {nudges} of {MAX_NUDGES}",
+                     move["ask"] if move and "ask" in move else raw)
                 remember(state, {"role": "user", "content": NUDGE})
                 continue
             shown = raw if move is None else move["ask"]
+            note(trace, "L4", "gave up",
+                 f"still not a question after {MAX_NUDGES} nudges — "
+                 "showing it flagged rather than hiding it", shown)
             return {"ask": shown, "flagged": True}
 
         if "ask" in move:
+            note(trace, "L4", "passed", "it ends in a question mark")
+            note(trace, "L2", "asked",
+                 "the envelope came back as a question — that convention is L2")
             return {"ask": move["ask"], "off_record": state["off_record"]}
 
         name = move.get("tool")
-        result = run_tool(name, move.get("args", {}), state)
+        note(trace, "L2", "called", f"it asked for {name}",
+             json.dumps(move.get("args", {}), indent=2))
+        result = run_tool(name, move.get("args", {}), state, trace)
         remember(state, {"role": "user", "content": f"[{name}: {result}]"})
         if name == "end_session":
             return {"ask": "Shall we stop there?", "propose_end": True,
                     "off_record": state["off_record"]}
 
+    note(trace, "L4", "capped",
+         f"{MAX_CALLS} calls without you — the loop stopped itself")
     return {"ask": "I went round five times without you. Where were we?",
             "flagged": True}
 
@@ -331,13 +461,27 @@ def remember(state, message):
         state["recordable"].append(message)
 
 
-def close_session(state):
+def ledger(state, trace=None):
+    """Two counts, every turn. Normally they match, which is the point: you
+    watch them match, and then you watch them stop. The gap after off-record is
+    exactly the material the closing call will never be shown."""
+    session, kept = len(state["session"]), len(state["recordable"])
+    note(trace, "L8", "ledger",
+         f"transcript {session} msgs · recordable {kept} msgs"
+         + (f" — {session - kept} will never reach the summary"
+            if session > kept else ""))
+
+
+def close_session(state, trace=None):
     """Kev ended it (only he can). Write what's worth keeping, and propose one
     change to the coaching style — proposed, not applied."""
     notes = "\n".join(f"- {n}" for n in state["notes"]) or "none"
-    closing = build_messages(state["recordable"]) + [
+    note(trace, "L8", "handed over",
+         f"the closing call gets the recordable {len(state['recordable'])} msgs"
+         + (", not the full transcript" if state["off_record"] else ""))
+    closing = build_messages(state["recordable"], trace) + [
         {"role": "user", "content": f"Notes you saved:\n{notes}\n\n{CLOSING}"}]
-    result = parse_move(ask_model(closing, max_tokens=500)) or {}
+    result = parse_move(ask_model(closing, max_tokens=500, trace=trace), trace) or {}
 
     summary = (result.get("summary") or "").strip()
     stuck = (result.get("stuck") or "").strip()
@@ -351,7 +495,16 @@ def close_session(state):
         append_file(STUCK, f"\n- **{today}** — {stuck}\n")
         wrote.append("stuck-patterns.md")
 
+    # L5: the only moment in the whole session when anything reaches disk.
+    note(trace, "L5", "wrote",
+         " and ".join(wrote) if wrote else "nothing worth keeping",
+         (f"{summary}\n\n{stuck}" if wrote else ""))
+
     edit = result.get("edit") or {}
+    note(trace, "L9", "proposed",
+         "one edit to its own instructions — yours to approve or veto"
+         if edit.get("add") else "no change to its instructions this time",
+         json.dumps(edit, indent=2) if edit else "")
     return {"summary": summary, "wrote": wrote, "edit": edit,
             "off_record": state["off_record"],
             "style": read_file(STYLE)}
@@ -361,17 +514,22 @@ def close_session(state):
 # The second loop. The coach may propose one edit to its own instructions;
 # this function is the ONLY thing that writes them, and it runs only when Kev
 # has clicked Approve. Veto costs nothing and leaves no trace.
-def apply_edit(edit):
+def apply_edit(edit, trace=None):
     style = read_file(STYLE)
     remove, add = (edit.get("remove") or "").strip(), (edit.get("add") or "").strip()
     if not add:
+        note(trace, "L9", "nothing to apply", "there was no proposed line")
         return False
     if remove and remove in style:
         style = style.replace(remove, add, 1)
+        how = "swapped one line for another"
     else:
         style = style.rstrip() + "\n" + add + "\n"
+        how = "added a line"
     with open(STYLE, "w") as handle:
         handle.write(style)
+    note(trace, "L9", "applied",
+         f"{how} in instructions.md — the second loop just closed", style)
     return True
 
 
@@ -424,21 +582,34 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._send(200, handle.read(), "text/html; charset=utf-8")
         elif self.path == "/build":
             self._send(200, json.dumps({"build": build_id(), "model": MODEL}))
+        elif self.path == "/stack":
+            # The spine, as data. The page draws it and knows nothing else
+            # about agents — the stack is defined here, where it's real.
+            self._send(200, json.dumps([
+                {"id": i, "name": n, "built": b, "note": d}
+                for i, n, b, d in LAYERS]))
         else:
             self._send(404, "not found", "text/plain")
 
     def do_POST(self):
+        # One turn's trace, made here so a call that fails half way still
+        # returns what it managed — a broken turn is the one you most want to
+        # watch. It goes back in the response and nowhere else (L8).
+        trace = []
         try:
             if self.path == "/say":
                 said = self._body().get("said", "").strip()
                 remember(STATE, {"role": "user", "content": said or
                                  "Open the session. Ask your first question."})
-                self._send(200, json.dumps(take_turn(STATE)))
+                move = take_turn(STATE, trace)
+                ledger(STATE, trace)
+                self._send(200, json.dumps({**move, "trace": trace}))
             elif self.path == "/end":          # only Kev reaches this
-                self._send(200, json.dumps(close_session(STATE)))
+                out = close_session(STATE, trace)
+                self._send(200, json.dumps({**out, "trace": trace}))
             elif self.path == "/approve":      # L9, and only with consent
-                ok = apply_edit(self._body().get("edit") or {})
-                self._send(200, json.dumps({"applied": ok,
+                ok = apply_edit(self._body().get("edit") or {}, trace)
+                self._send(200, json.dumps({"applied": ok, "trace": trace,
                                             "style": read_file(STYLE)}))
             elif self.path == "/quit":
                 # The window is the app, so quitting belongs in the window.
@@ -447,10 +618,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             else:
                 self._send(404, json.dumps({"ask": "no such thing"}))
         except (DailyLimit, Unreachable) as known:
-            self._send(200, json.dumps({"ask": str(known), "flagged": True}))
+            self._send(200, json.dumps({"ask": str(known), "flagged": True,
+                                        "trace": trace}))
         except Exception as error:  # never a wall of red Python in the page
             self._send(200, json.dumps({"ask": f"Something broke: {error}",
-                                        "flagged": True}))
+                                        "flagged": True, "trace": trace}))
 
     def log_message(self, *args):
         pass  # L8: nothing said in a session goes to a log, not even a URL

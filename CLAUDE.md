@@ -137,3 +137,19 @@ double-clickable (chmod +x; handle Gatekeeper if it complains).
 
 Kev works in 5-hour Max windows. Phases 1–2 fit in one sitting; 3–4 in another;
 5–6 in a third. Never start a phase you can't demo within the window.
+
+## Added after the six phases
+
+**The works panel** — a spine and a trace, so the stack is watchable while it runs rather
+than only readable in the source. Not a layer of its own; instrumentation *of* the layers.
+
+- Every layer calls `note(trace, ...)` as it acts. `coach.py` owns the whole description of
+  the stack (the `LAYERS` table, served at `/stack`) and every line of every trace.
+  `index.html` draws what it is sent and knows nothing about agents — same rule as before:
+  a window onto the agent, not the agent.
+- The trace is **RAM for one turn, then gone**. Never a file, never a log, never
+  localStorage. While off-record the transcript is still sent to the model, so it appears in
+  the L1 detail — persisting the trace anywhere would be a hole straight through L8's
+  off-record promise. Don't add an export, a save, or a replay.
+- Keep it in step: a new layer, tool, or check should say what it did, or the panel starts
+  lying by omission.
