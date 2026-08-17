@@ -10,13 +10,17 @@ phase at a time, tagged in `coach.py` so the file reads as the stack.
 
 ## Running it
 
-Double-click **`Coach.app`**. No terminal window, no commands — it appears in the Dock,
-opens the chat page, and quits when you quit it. Drag it to the Dock once and that's the
-only thing you ever touch.
+Double-click **`Coach.app`**. No terminal window, no commands — it starts the coach, opens
+the chat page and gets out of the way. Drag it to the Dock once and that's the only thing
+you ever touch. To stop: press **Quit** in the chat page.
 
 It also takes care of itself: on every launch it quietly pulls the newest build before
 starting, and if anything goes wrong — no keys, no Python, no internet — it says so in a
 normal Mac dialog rather than failing silently.
+
+Double-click it again while a session is open and it offers to restart on the new build,
+or leaves you where you are. It doesn't hang around in the background waiting to be asked;
+the coach itself keeps running until you quit it from the page.
 
 Two other ways in, for when you want to see the works:
 
@@ -25,7 +29,8 @@ Two other ways in, for when you want to see the works:
 | `Start Coach.command` | The same thing as a visible shell script. A Terminal window opens and you can watch it run. |
 | `python3 coach.py` | The actual program. Everything above is a wrapper around this line. |
 
-To stop it: quit the app (or close the Terminal window, if you started it that way).
+To stop it: press **Quit** in the chat page (or close the Terminal window, if you started
+it that way).
 
 ## What it depends on
 
@@ -169,6 +174,18 @@ so nothing does — and nothing should be added that does.
 both updates the code and runs it — there's no separate "download the new version" step,
 and no terminal. If the pull fails (no internet, local edits), it says so and runs the
 version already on the Mac rather than refusing to start.
+
+`memory/instructions.md` is the exception, and it has to be. It's tracked — watching the
+coaching style change over time *is* Phase 5 — but the coach also rewrites it whenever I
+approve an L9 edit, and git won't update a folder with a tracked file sitting dirty. So the
+second loop working was quietly what stopped new builds arriving; the coach improving
+itself was the reason it could never be improved.
+
+The launcher now copies that file aside, updates, and puts it back. If an update ever
+changes the starter style too, mine wins outright: the version in the repo is a seed, mine
+is what the sessions have shaped. Any *other* tracked file being edited by hand still stops
+the update and says so — an unexplained change to the program should be announced, not
+quietly pocketed.
 
 ## What stays on this Mac
 

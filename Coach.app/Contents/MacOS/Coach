@@ -24,7 +24,10 @@ ask() {   # a real question, because ending a session is never my call
   /usr/bin/osascript -e "display dialog \"$msg\" with title \"The Socratic Coach\" buttons {\"Not now\", \"Restart\"} default button 2" 2>/dev/null | grep -q "Restart"
 }
 
-head_sha() { /bin/cat .git/refs/heads/main 2>/dev/null || echo none; }
+# Ask git, rather than reading .git/refs/heads/main by hand. That file stops
+# existing the moment git packs its refs, and then every launch thinks the
+# build is "none" — the same trap coach.py's build_id() already sidesteps.
+head_sha() { /usr/bin/git rev-parse HEAD 2>/dev/null || echo none; }
 
 stop_running() {
   # Ask it to stop the civilised way; insist if it's an older build that
@@ -54,19 +57,53 @@ WANTED=""
 if [ -d .git ]; then
   /usr/bin/git fetch --quiet origin main >/dev/null 2>&1
   WANTED="$(/usr/bin/git rev-parse origin/main 2>/dev/null)"
+  # memory/instructions.md is tracked, and it is the one tracked file the coach
+  # rewrites by itself — every approved L9 edit changes it. git then refuses to
+  # touch the folder while it's dirty, so the second loop working was quietly
+  # what stopped new builds arriving. Set his copy aside, update, put it back.
+  #
+  # Deliberately a copy rather than a stash: a stash has to be reapplied, and
+  # if an update ever edits this file too, reapplying it leaves conflict
+  # markers sitting in the middle of the coaching style — which the coach then
+  # reads out as though he'd written it. A copy can't conflict. His version
+  # wins outright, and that's the right way round: the file in the repo is a
+  # starting seed, his is what the sessions have shaped it into.
+  KEEP=""
+  if [ -f memory/instructions.md ] &&
+     ! /usr/bin/git diff --quiet -- memory/instructions.md 2>/dev/null; then
+    KEEP="$(mktemp "${TMPDIR:-/tmp}/coachstyle.XXXXXX" 2>/dev/null)"
+    # Give up the working copy only once there is definitely a copy to hand
+    # back. Discarding first and finding out afterwards that the copy failed
+    # would lose the style outright, which is the one thing worse than not
+    # updating — so if anything here doesn't work, leave the file alone and
+    # let the update be refused instead.
+    if [ -n "$KEEP" ] && /bin/cp memory/instructions.md "$KEEP" 2>/dev/null; then
+      /usr/bin/git checkout --quiet -- memory/instructions.md >/dev/null 2>&1
+    else
+      KEEP=""
+    fi
+  fi
+
+  # Still --ff-only. Any OTHER tracked file being dirty means something was
+  # edited by hand, and that should stop the update and say so, not be
+  # quietly pocketed.
   /usr/bin/git pull --quiet --ff-only >/dev/null 2>&1
+
+  if [ -n "$KEEP" ]; then
+    /bin/cp "$KEEP" memory/instructions.md
+    /bin/rm -f "$KEEP"
+  fi
 fi
 AFTER="$(head_sha)"
 
-# A pull can fail quietly — no network, or a local edit to a file the update
-# also touches. Silence looked exactly like success for four rounds of this
-# build, so a refused update now says so out loud rather than nothing at all.
+# A pull can fail quietly. Silence looked exactly like success for four rounds
+# of this build, so a refused update says so out loud rather than nothing.
 if [ -n "$WANTED" ] && [ "$AFTER" != "$WANTED" ]; then
   alert "There's a newer build I couldn't install.
 
-Usually that means no internet, or that a file I track has been edited by hand — memory/instructions.md is the likely one.
+Usually that means no internet, or that a file I track has been edited by hand. Your coaching style isn't the one — I set that aside and put it back either way.
 
-I'll carry on with the version already here (${AFTER:0:7})."
+Nothing has been lost. I'll carry on with the version already here (${AFTER:0:7})."
 fi
 
 if running; then
@@ -131,10 +168,22 @@ There's a file called .env.example in the folder I'm about to open. Copy it to .
   exit 1
 fi
 
-# --- start it, and watch long enough to catch a birth defect --------------
-ERRLOG="$(mktemp -t coach)"
-COACH_NO_BROWSER=1 "$PY" coach.py >/dev/null 2>"$ERRLOG" &
+# --- start it, watch long enough to catch a birth defect, then get out ------
+# This used to end in `wait`, which kept this script — and therefore the app —
+# alive for the whole session. An app bundle that is really a shell script has
+# no way to answer the Apple Event macOS sends when you double-click something
+# already running, so the second launch died with "You can't open the
+# application Coach because it is not responding", and the restart-to-update
+# question above became unreachable in the exact situation it exists for.
+#
+# So: start the coach, check it drew breath, hand over the page, and leave.
+# Nothing stays running that macOS believes is an application. The coach itself
+# carries on until you press Quit on the page — which was always the way to
+# stop it.
+ERRLOG="$(mktemp "${TMPDIR:-/tmp}/coach.XXXXXX")"
+COACH_NO_BROWSER=1 nohup "$PY" coach.py >/dev/null 2>"$ERRLOG" &
 SERVER=$!
+disown 2>/dev/null      # ours to start, not ours to outlive
 
 for _ in {1..40}; do
   running && break
@@ -151,13 +200,10 @@ $(/usr/bin/tail -c 700 "$ERRLOG")"
 fi
 
 open_page
-wait "$SERVER"
-STATUS=$?
 
-# A non-zero exit means it fell over mid-session rather than being quit.
-if [ "$STATUS" -ne 0 ] && [ "$STATUS" -ne 143 ] && [ -s "$ERRLOG" ]; then
-  alert "The coach stopped unexpectedly.
-
-$(/usr/bin/tail -c 700 "$ERRLOG")"
-fi
+# Unlinked rather than kept: python still holds the handle, so nothing is lost
+# while it runs, and no session leaves a file behind afterwards (L8). Leaving
+# early costs one thing — a crash mid-session no longer raises a dialog. The
+# page notices instead, and says the coach stopped answering.
 rm -f "$ERRLOG"
+exit 0
