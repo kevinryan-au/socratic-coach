@@ -122,34 +122,38 @@ test used a stub. The first honest run is the first time I open it.
 There's a panel down the right-hand side — **Hide the works** in the header turns it off,
 and it remembers which way you left it.
 
-The top half is the loop — the four layers that run, in order, every single turn:
+The top half is the loop — the four layers that run, in order, every single turn. Each box
+says what it does in plain words, with the proper name for it underneath:
 
 ```
-                 you type a reply
-                        │
-        ┌──────▶  L1  assemble the context
-        │               │
-   ✗ nudged             ▼
-   L3 ran a tool  L0  ask the model
-                        │
-   up to 5 laps         ▼
-        │         L4  check the reply
-        └───────────────┤
-                        │ ✓ it asked something
-                        ▼
-                  L2  a question, in the envelope
-                        │
-                        ▼
-                    back to you
+                     you type a reply
+                            │
+            ┌──────▶  L1  gather everything it can see
+            │               context assembly
+            │               │
+  round again              ▼
+  up to 5 times      L0  send it all to the model
+            │               inference
+            │               │
+            │               ▼
+            │         L4  check what came back
+            │               control loop
+            └───────────────┤
+                            │ ✓ it did ask something
+                            ▼
+                      L2  hand the question back
+                            tool interface
+                            │
+                            ▼
+                        back to you
 ```
 
 It lights up in order as each turn replays. The return curve is the part worth staring at:
-a nudge and a tool call *both* re-enter at L1, which is why the context gets rebuilt from
-scratch every lap, and why the tokens climb the way they do.
-
-L5, L8 and L9 sit underneath as chips, because they touch a turn without being steps in it
-— L8 alongside every turn, L5 and L9 only at the close. L6 and L7 are named and greyed with
-their reason. An absence you can see is a decision; an absence you can't is an oversight.
+a nudge and a tool call *both* re-enter at L1, which is why everything gets gathered from
+scratch every lap, and why the cost climbs the way it does. Beside it, the two reasons it
+goes round again, and the layers that touch a turn without being steps in it — L8 alongside
+every turn, L5 and L9 only at the close. L6 and L7 are named and greyed with their reason.
+An absence you can see is a decision; an absence you can't is an oversight.
 
 The bottom half is one line per turn — the route that turn actually took:
 
@@ -160,28 +164,37 @@ TURN 3   1→0→2→3 │ 1→0→4✓ → you       2 laps · 3.8s · 3,041 to
 CLOSING THE SESSION   1→0→5→9                 4.1s · 2,196 tok
 ```
 
-Each `│` is another lap round the loop. Turn 2 is the question-checker doing its job: the
-model stated instead of asking, `4✗` bounced it, and the whole loop ran again. That used to
-be completely invisible — the checker only ever surfaced the failures it *couldn't* fix.
-It's the house rule with its sleeves rolled up: the constitution *asks* for a question, and
-six lines of Python *require* one.
+The numbers are the boxes above. Each `│` is another lap. Turn 2 is the question-checker
+doing its job: the model stated instead of asking, `4✗` bounced it, and the whole loop ran
+again. That used to be completely invisible — the checker only ever surfaced the failures it
+*couldn't* fix. It's the house rule with its sleeves rolled up: the constitution *asks* for a
+question, and six lines of Python *require* one.
 
 Turn 3 is a tool call — `2→3`, the envelope asking and the code running it — which also
 costs a lap.
 
-**Click any turn** and the full trace opens underneath: every layer, in order, saying what
-it did in a sentence. Any of those lines with a `⌄` opens further — click `L1` and you get
-the entire context that went to the model, verbatim, every character it could see before it
-wrote a word. Click `L0` and you get the raw reply, before anything parsed it.
+**Click any turn** and the full trace opens underneath: every layer, in order, saying what it
+did in a sentence, in plain words rather than in the vocabulary of the code —
+
+> **L1 gathered** — 4,668 characters for it to read: the rules it was given (808), your
+> coaching style (760), what it remembers of past sessions (2,500), where you tend to get
+> stuck (308), and 9 messages of today's conversation. Only the most recent 2,500 characters
+> of session-log fit — the rest is out of reach.
+>
+> **L4 sent back** — that was a statement, not a question. Sending it back to try again —
+> attempt 1 of 2. You never saw the reply below; the code caught it first.
+
+Any of those lines with a `⌄` opens further — click `L1` and you get the entire context that
+went to the model, verbatim, every character it could see before it wrote a word. Click `L0`
+and you get the raw reply, before anything parsed it.
 
 Two of those lines are worth watching in particular:
 
-- **`L1 assembled`** — the number climbs every turn, because every turn re-sends the whole
+- **`L1 gathered`** — the number climbs every turn, because every turn re-sends the whole
   conversation. That is the free allowance draining, in real time, and it is why the memory
   files are cut to the last 2,500 characters.
-- **`L8 ledger`** — two counts that normally match. Go off the record and they stop
-  matching, and the gap between them is exactly the material the closing summary will never
-  be shown.
+- **`L8 so far`** — two counts that normally match. Go off the record and they stop matching,
+  and the gap between them is exactly the material the closing summary will never be shown.
 
 **The trace is never written down.** Not to a file, not to a log, not to the browser's
 storage — only the show/hide preference is remembered. It lives in memory for one turn, goes

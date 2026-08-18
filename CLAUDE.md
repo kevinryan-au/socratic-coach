@@ -153,6 +153,13 @@ instrumentation *of* the layers.
   tried first and taught nothing, because execution order is L4→L1→L0→L4→L2, so the lights
   jump around and the eye can't follow a path. Both back-edges rejoin at L1; drawing them
   any other way would hide why the context is rebuilt every lap.
+- **Plain words first, everywhere in the panel.** This is the "explain as you go" rule from
+  above, applied to the running app: every trace line says what happened, not what it is
+  called — "the model thought for 1.3 seconds", never "L0 latency 1.26". The layer number
+  is already on screen; the sentence is the part doing the teaching. Same for the boxes:
+  what it does on top, the proper name underneath, both from `LAYERS`.
+- Give it the room. The conversation is one question at a time and needs far less width
+  than the works do; the panel takes about half the window when it's showing.
 - The trace is **RAM for one turn, then gone**. Never a file, never a log, never
   localStorage. While off-record the transcript is still sent to the model, so it appears in
   the L1 detail — persisting the trace anywhere would be a hole straight through L8's

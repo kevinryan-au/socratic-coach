@@ -79,29 +79,50 @@
   button.send:disabled { background: #b8b5ae; cursor: default; }
 
   /* --- the works: the spine, and the trace running down beside it --- */
+  /* The conversation is one question at a time and needs far less room than
+     the works do. When the works are showing, they get about half the window. */
   #rail {
-    width: 400px; flex: none; min-height: 0; background: #f7f6f3;
+    width: clamp(440px, 54vw, 900px); flex: none; min-height: 0;
+    background: #f7f6f3;
     border-left: 1px solid var(--line); display: flex; flex-direction: column;
   }
   body.no-works #rail { display: none; }
-  @media (max-width: 900px) { #rail { width: 320px; } }
   @media (max-width: 720px) { #rail { display: none; } }
 
   .rail-h {
     font-size: .66rem; font-weight: 750; letter-spacing: .1em;
     text-transform: uppercase; color: var(--muted); margin: 0 0 6px;
   }
-  #loop { flex: none; padding: 16px 14px 12px; border-bottom: 1px solid var(--line); }
-  #loopsvg { width: 100%; height: auto; display: block; }
+  #loop {
+    flex: none; padding: 18px 20px 14px; border-bottom: 1px solid var(--line);
+  }
+  /* Wide enough and the drawing sits beside its explanations rather than on
+     top of them, which keeps the turns below in view. Narrow, they stack. */
+  .loop-cols {
+    display: flex; flex-wrap: wrap; gap: 4px 26px; align-items: flex-start;
+  }
+  /* The drawing is the point, so it takes the larger share of the width. */
+  #loopsvg {
+    flex: 3 1 300px; max-width: 470px; max-height: 56vh; height: auto;
+    display: block;
+  }
+  .loop-side { flex: 2 1 230px; min-width: 0; padding-top: 6px; }
+  .side-h {
+    font-size: .64rem; font-weight: 750; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 5px;
+  }
+  .loop-side .side-h + * { margin-top: 0; }
+  .loop-side #edges + #unbuilt { margin-top: 8px; }
+  .loop-side .side-h:not(:first-child) { margin-top: 16px; }
 
   /* the drawing */
   .n rect { fill: #fff; stroke: var(--line); stroke-width: 1; }
-  .n text { font-size: 11.5px; }
   .n .nid {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 10.5px; font-weight: 700; fill: var(--muted);
+    font-size: 11px; font-weight: 700; fill: var(--muted);
   }
-  .n .nnm { fill: var(--ink); }
+  .n .ndoes { font-size: 12.5px; fill: var(--ink); }
+  .n .nnm { font-size: 9.5px; fill: var(--muted); letter-spacing: .04em; }
   .n.lit rect { stroke: var(--accent); stroke-width: 1.6; }
   .n.lit .nid { fill: var(--accent); }
   .n.pulse rect { animation: boxpulse .9s ease-out; }
@@ -110,38 +131,53 @@
   .edge.lit { stroke: var(--accent); marker-end: url(#ahlit); }
   .head { fill: var(--line); stroke: none; }
   .head.lit { fill: var(--accent); }
-  .elabel { font-size: 9px; fill: var(--muted); opacity: .55; }
-  .elabel.lit { fill: var(--accent); opacity: 1; font-weight: 600; }
+  .elabel { font-size: 10px; fill: var(--muted); opacity: .6; }
   .elabel.quiet { opacity: .45; font-style: italic; }
-  .ends { font-size: 10.5px; fill: var(--muted); font-style: italic; }
+  .ends { font-size: 11px; fill: var(--muted); font-style: italic; }
 
-  #edges { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0 0; }
+  /* why it goes round again — full width, so it can say it in words */
+  .why-row {
+    display: flex; gap: 8px; align-items: baseline; padding: 2px 0;
+    font-size: .75rem; line-height: 1.45; color: var(--muted); opacity: .6;
+  }
+  .why-row.lit { opacity: 1; color: var(--accent); font-weight: 600; }
+  .why-row .mk { flex: none; width: 1.1em; text-align: center; }
+
+  #edges { display: flex; flex-direction: column; gap: 4px; }
   .chip {
-    font-size: .69rem; padding: 3px 9px; border-radius: 999px;
+    font-size: .74rem; line-height: 1.4; padding: 5px 10px; border-radius: 8px;
     border: 1px solid var(--line); background: #fff; color: var(--muted);
   }
-  .chip.lit { border-color: var(--accent); color: var(--accent); }
+  .chip b { color: var(--ink); font-weight: 600; }
+  .chip.lit { border-color: var(--accent); }
+  .chip.lit b { color: var(--accent); }
   .chip.pulse { animation: chippulse .9s ease-out; }
   @keyframes chippulse { from { background: #cffafe; } }
   #unbuilt {
-    margin: 9px 0 0; font-size: .69rem; line-height: 1.45;
-    color: #a3a099; font-style: italic;
+    font-size: .72rem; line-height: 1.5; color: #a3a099; font-style: italic;
   }
 
   /* one line per turn, the path it actually took */
-  #traces { flex: 1; overflow-y: auto; padding: 8px 12px 24px; min-height: 0; }
+  #traces { flex: 1; overflow-y: auto; padding: 12px 20px 24px; min-height: 0; }
+  .traces-h {
+    font-size: .66rem; font-weight: 750; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 2px;
+  }
+  .traces-sub {
+    font-size: .73rem; color: var(--muted); font-style: italic; margin: 0 0 8px;
+  }
   .tp {
-    display: flex; gap: 8px; align-items: baseline; cursor: pointer;
+    display: flex; gap: 10px; align-items: baseline; cursor: pointer;
     padding: 6px 7px; border-radius: 7px;
   }
   .tp:hover { background: #fff; }
   .tp-label {
-    flex: none; width: 4.2em; font-size: .64rem; font-weight: 700;
+    flex: none; width: 5.4em; font-size: .64rem; font-weight: 700;
     letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
   }
   .tp-path {
     flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: .76rem; line-height: 1.6; word-break: break-word;
+    font-size: .8rem; line-height: 1.6; word-break: break-word;
   }
   .tp-path .bad { color: #b45309; font-weight: 700; }
   .tp-path .good { color: var(--accent); }
@@ -221,13 +257,14 @@
   <aside id="rail">
     <div id="loop">
       <p class="rail-h">One turn, through the loop</p>
+      <div class="loop-cols">
       <!--
         The boxes and arrows are this file's business; what the layers are and
         what they did stays coach.py's. Both back-arrows really do return to L1
         — a nudge and a tool call both send the loop round from the top, which
         is why the context is assembled again, and why the tokens climb.
       -->
-      <svg viewBox="0 0 340 300" id="loopsvg" aria-label="the control loop">
+      <svg viewBox="0 0 372 334" id="loopsvg" aria-label="the control loop">
         <defs>
           <marker id="ah" viewBox="0 0 8 8" refX="6.5" refY="4"
                   markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -239,57 +276,80 @@
           </marker>
         </defs>
 
-        <text class="ends" x="228" y="12" text-anchor="middle">you type a reply</text>
-        <path class="edge" d="M228,18 V30" marker-end="url(#ah)"/>
+        <text class="ends" x="242" y="13" text-anchor="middle">you type a reply</text>
+        <path class="edge" d="M242,20 V32" marker-end="url(#ah)"/>
 
         <g class="n" id="n-L1">
-          <rect x="124" y="32" width="208" height="38" rx="8"/>
-          <text class="nid" x="138" y="56">L1</text>
-          <text class="nnm" x="162" y="56">assemble the context</text>
+          <rect x="132" y="34" width="220" height="46" rx="8"/>
+          <text class="nid" x="146" y="55">L1</text>
+          <text class="ndoes" x="172" y="55" data-does="L1"></text>
+          <text class="nnm" x="172" y="70" data-name="L1"></text>
         </g>
-        <path class="edge" d="M228,70 V86" marker-end="url(#ah)"/>
+        <path class="edge" d="M242,80 V96" marker-end="url(#ah)"/>
 
         <g class="n" id="n-L0">
-          <rect x="124" y="88" width="208" height="38" rx="8"/>
-          <text class="nid" x="138" y="112">L0</text>
-          <text class="nnm" x="162" y="112">ask the model</text>
+          <rect x="132" y="98" width="220" height="46" rx="8"/>
+          <text class="nid" x="146" y="119">L0</text>
+          <text class="ndoes" x="172" y="119" data-does="L0"></text>
+          <text class="nnm" x="172" y="134" data-name="L0"></text>
         </g>
-        <path class="edge" d="M228,126 V142" marker-end="url(#ah)"/>
+        <path class="edge" d="M242,144 V160" marker-end="url(#ah)"/>
 
         <g class="n" id="n-L4">
-          <rect x="124" y="144" width="208" height="38" rx="8"/>
-          <text class="nid" x="138" y="168">L4</text>
-          <text class="nnm" x="162" y="168">check the reply</text>
+          <rect x="132" y="162" width="220" height="46" rx="8"/>
+          <text class="nid" x="146" y="183">L4</text>
+          <text class="ndoes" x="172" y="183" data-does="L4"></text>
+          <text class="nnm" x="172" y="198" data-name="L4"></text>
         </g>
 
         <!-- Round again. One curve, because both reasons rejoin in the same
              place: a nudge and a tool call BOTH re-enter at L1, which is why
-             the context is rebuilt each lap and why the tokens climb. -->
-        <path class="edge" id="edge-back" d="M124,163 C 10,163 10,51 119,51"
+             everything is gathered again each time and why the cost climbs.
+             The two reasons are spelled out under the drawing, where there is
+             room to say them in words instead of abbreviating. -->
+        <path class="edge" id="edge-back" d="M132,185 C 8,185 8,57 127,57"
               marker-end="url(#ah)"/>
-        <text class="elabel" id="lbl-nudge" x="54" y="98">✗ nudged</text>
-        <text class="elabel" id="lbl-tool" x="54" y="111">L3 ran a tool</text>
-        <text class="elabel quiet" x="54" y="127">up to 5 laps</text>
+        <text class="elabel" x="56" y="116">round again</text>
+        <text class="elabel quiet" x="56" y="130">up to 5 times</text>
 
-        <path class="edge" id="edge-out" d="M228,182 V212" marker-end="url(#ah)"/>
-        <text class="elabel" x="236" y="201">✓ it asked something</text>
+        <path class="edge" id="edge-out" d="M242,208 V240" marker-end="url(#ah)"/>
+        <text class="elabel" x="250" y="228">✓ it did ask something</text>
 
         <g class="n" id="n-L2">
-          <rect x="124" y="214" width="208" height="38" rx="8"/>
-          <text class="nid" x="138" y="238">L2</text>
-          <text class="nnm" x="162" y="238">a question, in the envelope</text>
+          <rect x="132" y="242" width="220" height="46" rx="8"/>
+          <text class="nid" x="146" y="263">L2</text>
+          <text class="ndoes" x="172" y="263" data-does="L2"></text>
+          <text class="nnm" x="172" y="278" data-name="L2"></text>
         </g>
-        <path class="edge" d="M228,252 V270" marker-end="url(#ah)"/>
-        <text class="ends" x="228" y="288" text-anchor="middle">back to you</text>
+        <path class="edge" d="M242,288 V304" marker-end="url(#ah)"/>
+        <text class="ends" x="242" y="322" text-anchor="middle">back to you</text>
       </svg>
 
-      <div id="edges"></div>
-      <div id="unbuilt"></div>
+      <div class="loop-side">
+        <p class="side-h">Why it goes round again</p>
+        <div id="why">
+          <div class="why-row" id="why-nudge">
+            <span class="mk">✗</span>
+            <span>it stated instead of asking, so the code sent it back</span>
+          </div>
+          <div class="why-row" id="why-tool">
+            <span class="mk">⚙</span>
+            <span>it asked to use a tool, so the code ran it and went again</span>
+          </div>
+        </div>
+
+        <p class="side-h">Not steps in the loop, but they touch it</p>
+        <div id="edges"></div>
+        <div id="unbuilt"></div>
+      </div>
+      </div>
     </div>
 
     <div id="traces">
-      <p class="rail-note">Nothing has run yet. Each turn draws the path it
-        took — click one to read what every layer did.</p>
+      <p class="traces-h">Every turn, and the way it went</p>
+      <p class="traces-sub">The numbers are the boxes above. Click a turn to
+        read what each one did.</p>
+      <p class="rail-note">Nothing has run yet.</p>
     </div>
   </aside>
 </div>
@@ -346,22 +406,40 @@
   const BOX = { L1: 'n-L1', L0: 'n-L0', L4: 'n-L4', L2: 'n-L2' };
 
   fetch('/stack').then(r => r.json()).then(stack => {
+    // The boxes are drawn here but worded there: plain phrase on top, the
+    // proper name underneath, both straight out of coach.py.
+    stack.forEach(l => {
+      const does = document.querySelector('[data-does="' + l.id + '"]');
+      if (does) does.textContent = l.does;
+      const name = document.querySelector('[data-name="' + l.id + '"]');
+      if (name) name.textContent = l.name.toLowerCase();
+      const box = document.getElementById('n-' + l.id);
+      if (box) {
+        const tip = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+        tip.textContent = l.note;
+        box.appendChild(tip);
+      }
+    });
+
     edgesEl.textContent = '';
     stack.filter(l => l.where === 'edge').forEach(l => {
       const chip = document.createElement('span');
       chip.className = 'chip';
       chip.id = 'chip-' + l.id;
       chip.title = l.note;
-      chip.textContent = l.id + ' ' + l.name;
+      const tag = document.createElement('b');
+      tag.textContent = l.id + ' ' + l.name;
+      chip.append(tag, document.createTextNode(' — ' + l.does));
       edgesEl.appendChild(chip);
     });
+
     // The loop explains itself by lighting up. What isn't built can't, so it
     // says why in words — an absence you can read is a decision.
     unbuiltEl.textContent = '';
     stack.filter(l => l.where === 'unbuilt').forEach(l => {
       const row = document.createElement('div');
-      row.textContent = l.id + ' ' + l.name.toLowerCase()
-        + ' — not built, on purpose: ' + l.note;
+      row.textContent = l.id + ' ' + l.name.toLowerCase() + ' — could '
+        + l.does + ', but doesn\'t: ' + l.note;
       unbuiltEl.appendChild(row);
     });
   }).catch(() => {});
@@ -378,25 +456,26 @@
     pulse(document.getElementById(BOX[e.layer]));
     pulse(document.getElementById('chip-' + e.layer));
     // The two reasons a turn goes round again. Both rejoin at L1, so the same
-    // arrow lights either way — the label says which of them it was.
-    if (e.event === 'bounced') {
-      pulse(document.getElementById('lbl-nudge'));
+    // arrow lights either way — the sentence underneath says which it was.
+    if (e.event === 'sent back') {
+      pulse(document.getElementById('why-nudge'));
       pulse(document.getElementById('edge-back'));
     }
-    if (e.layer === 'L3' && e.event.indexOf('ran') === 0) {
-      pulse(document.getElementById('lbl-tool'));
+    if (e.layer === 'L3' && e.event === 'ran') {
+      pulse(document.getElementById('why-tool'));
       pulse(document.getElementById('edge-back'));
     }
-    if (e.event === 'asked') pulse(document.getElementById('edge-out'));
+    if (e.event === 'handed over') pulse(document.getElementById('edge-out'));
   }
 
   // Turning the trace into a path. Events that describe rather than advance —
-  // the lap counter, the parse result, the ledger — are read in the detail, not
-  // drawn in the line.
-  const ASIDE = new Set(['lap', 'parse', 'ledger', 'handed over',
+  // the round counter, how the reply read, the running tally — are there in the
+  // detail, not drawn in the line. These words come from coach.py; rename one
+  // there and it must be renamed here too.
+  const ASIDE = new Set(['round', 'read it', 'so far', 'kept back',
                          'nothing to apply']);
-  const MARK = { bounced: '✗', 'gave up': '!', capped: '!', refused: '!',
-                 unreachable: '!', passed: '✓' };
+  const MARK = { 'sent back': '✗', 'gave up': '!', 'stopped itself': '!',
+                 refused: '!', unreachable: '!', passed: '✓' };
 
   function glyph(e) {
     const mark = MARK[e.event] || '';
@@ -486,13 +565,13 @@
           + (ms / 1000).toFixed(1) + 's'
           + (went ? ' · ' + (went + came).toLocaleString() + ' tok' : '');
       }
-      if (e.event === 'lap') {
+      if (e.event === 'round') {
         laps++;
         if (started) say('  │  ', 'sep');
         started = false;
         return;
       }
-      if (e.event === 'asked') { say('  → you', 'exit'); return; }
+      if (e.event === 'handed over') { say('  → you', 'exit'); return; }
       if (ASIDE.has(e.event)) return;
       if (started) say('→', 'sep');
       path.appendChild(glyph(e));
