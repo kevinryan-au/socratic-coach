@@ -38,6 +38,11 @@ L0–L9 agent stack — and the whole point is that he watches each layer become
 3. **Never answers, only asks** — soft rule in the prompt, hard rule in code (see
    question-checker below). House rule to preserve in comments: *behaviour you'd like
    goes in the prompt; behaviour you require goes in code.*
+   **The first question of a session is an invitation, not a diagnosis.** "Ask about the
+   thing being avoided" is good practice once there is something to work with, and an
+   accusation on turn one, when there is no conversation to have avoided anything in. Kev
+   types nothing to open a session, so the code types the opening turn (`OPENING`) — which
+   makes that framing a decision made in the file, not a mood the model was in.
 4. **Done is Kev's call.** The model may propose ending a session; only Kev ends it.
 5. **The second loop ships last**: after each session the coach proposes ONE edit to
    instructions.md; it is applied only if Kev clicks Approve.
@@ -160,6 +165,13 @@ instrumentation *of* the layers.
   what it does on top, the proper name underneath, both from `LAYERS`.
 - Give it the room. The conversation is one question at a time and needs far less width
   than the works do; the panel takes about half the window when it's showing.
+- **Two timescales, not one.** The loop drawing shows a turn; underneath it, "one session,
+  and what survives it" shows the close — because L5, L8 and L9 never appear in a turn's
+  path, and their whole relationship is the *order* they act in at the end (L8 gates what the
+  closing call sees → that one call yields both L5's writes and L9's proposal → L9 needs
+  consent → L1 gathers all three back in next session). Three chips in a row can't say that.
+  It comes from `KEEPS`/`STAGES`/`CLOSE` in `coach.py`, grouped by `stage` the way the layers
+  are grouped by `where`.
 - **Every part of the drawing opens.** A box, a chip, an unbuilt line and a reason-it-went-
   round are all handles on one layer; clicking any of them shows that layer's own words —
   `does`, `sits`, `note`, all from `LAYERS`. One at a time, under the drawing. A tooltip

@@ -171,6 +171,53 @@
     background: none; border: 0; padding: 1px 0; cursor: pointer;
   }
 
+  /* --- the second view: one session, not one turn ----------------------- */
+  /* The loop drawing answers "what happens when I press Send". This answers
+     "what happens to any of it afterwards" — the question three chips in a
+     row could never answer, because the whole point is the order they act in.
+     Quieter than the drawing above: it is the second thing you read, not the
+     first. Plain HTML, because it is a stack of labelled rows and boxes and
+     wants to reflow at 440px, which is exactly what HTML does and SVG doesn't. */
+  #session { margin: 16px 0 0; padding-top: 13px; border-top: 1px solid var(--line); }
+  .ses-box {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 11px 9px;
+  }
+  .ses-cap {
+    margin: 0 0 5px; font-size: .62rem; font-weight: 750; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .ses-row {
+    display: flex; gap: 10px; align-items: baseline;
+    font-size: .74rem; line-height: 1.45; padding: 1px 0;
+  }
+  .ses-row .nm {
+    flex: none; width: 11.6em; white-space: nowrap; color: var(--ink);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .71rem;
+  }
+  .ses-row .nt { color: var(--muted); min-width: 0; }
+  /* the step between two boxes: who acts, and on what */
+  .ses-step {
+    display: flex; gap: 7px; align-items: baseline;
+    padding: 5px 0 5px 12px; font-size: .73rem; line-height: 1.45; color: var(--muted);
+  }
+  .ses-step .ar { flex: none; font-size: .9rem; line-height: 1; color: #c4c1ba; }
+  .ses-tag {
+    flex: none; font: inherit; cursor: pointer;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .69rem; font-weight: 700; color: var(--accent);
+    background: none; border: 0; padding: 0;
+  }
+  .ses-tag:hover { text-decoration: underline; }
+  .ses-tag.open { color: var(--ink); text-decoration: underline; }
+  .ses-call { display: flex; flex-direction: column; gap: 2px; }
+  .ses-call .ses-what { font-size: .78rem; color: var(--ink); }
+  .ses-call .ses-draws { font-size: .72rem; color: var(--muted); }
+  /* the two things the one closing call produces, side by side because they
+     are simultaneous — same call, two outputs, one of them needing consent */
+  .ses-split { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .ses-split > div { flex: 1 1 210px; min-width: 0; }
+
   /* --- open a layer up ------------------------------------------------- */
   /* Everything in the drawing answers to a click. The panel is one at a time
      and lives under the picture, so reading about a box never scrolls the box
@@ -398,6 +445,64 @@
       </div>
       </div>
 
+      <!-- The other timescale. The drawing above is one turn; this is one
+           session, and it is the only place the three layers that aren't
+           steps in the loop can be seen acting on each other. Shape is this
+           file's; every word arrives from /stack. -->
+      <div id="session">
+        <p class="side-h">One session, and what survives it</p>
+
+        <div class="ses-box">
+          <p class="ses-cap" data-stage="during"></p>
+          <div data-rows="during"></div>
+        </div>
+
+        <p class="ses-step">
+          <span class="ar">↓</span>
+          <button type="button" class="ses-tag" data-layer="L8">L8</button>
+          <span data-close="gate"></span>
+        </p>
+
+        <div class="ses-box ses-call">
+          <span class="ses-what">
+            <button type="button" class="ses-tag" data-layer="L0">L0</button>
+            <span data-close="call"></span>
+          </span>
+          <span class="ses-draws" data-close="draws"></span>
+        </div>
+
+        <div class="ses-split">
+          <div>
+            <p class="ses-step">
+              <span class="ar">↓</span>
+              <button type="button" class="ses-tag" data-layer="L5">L5</button>
+              <span data-close="keeps"></span>
+            </p>
+            <div class="ses-box">
+              <p class="ses-cap" data-stage="close"></p>
+              <div data-rows="close"></div>
+            </div>
+          </div>
+          <div>
+            <p class="ses-step">
+              <span class="ar">↓</span>
+              <button type="button" class="ses-tag" data-layer="L9">L9</button>
+              <span data-close="proposes"></span>
+            </p>
+            <div class="ses-box">
+              <p class="ses-cap" data-stage="approve"></p>
+              <div data-rows="approve"></div>
+            </div>
+          </div>
+        </div>
+
+        <p class="ses-step">
+          <span class="ar">↓</span>
+          <button type="button" class="ses-tag" data-layer="L1">L1</button>
+          <span data-close="back"></span>
+        </p>
+      </div>
+
       <!-- One layer at a time, opened by clicking it. Every word in here
            arrives from /stack — the page decides where it goes, not what it
            says. -->
@@ -474,7 +579,9 @@
   // chip instead — those are the layers that touch a turn without being a step.
   const BOX = { L1: 'n-L1', L0: 'n-L0', L4: 'n-L4', L2: 'n-L2' };
 
-  fetch('/stack').then(r => r.json()).then(stack => {
+  fetch('/stack').then(r => r.json()).then(spine => {
+    const stack = spine.layers;
+
     // The boxes are drawn here but worded there: plain phrase on top, the
     // proper name underneath, both straight out of coach.py.
     stack.forEach(l => {
@@ -510,6 +617,31 @@
       row.textContent = l.id + ' ' + l.name.toLowerCase() + ' — could '
         + l.does + ', but doesn\'t: ' + l.note;
       unbuiltEl.appendChild(row);
+    });
+
+    // The session view: three groups of things that survive, and the steps
+    // between them. Which group a thing belongs to is coach.py's call, same as
+    // which side of the loop a layer sits on.
+    Object.keys(spine.stages).forEach(stage => {
+      const cap = document.querySelector('[data-stage="' + stage + '"]');
+      if (cap) cap.textContent = spine.stages[stage];
+      const rows = document.querySelector('[data-rows="' + stage + '"]');
+      if (!rows) return;
+      rows.textContent = '';
+      spine.keeps.filter(k => k.stage === stage).forEach(k => {
+        const row = document.createElement('div');
+        row.className = 'ses-row';
+        const nm = document.createElement('span');
+        nm.className = 'nm'; nm.textContent = k.what;
+        const nt = document.createElement('span');
+        nt.className = 'nt'; nt.textContent = k.note;
+        row.append(nm, nt);
+        rows.appendChild(row);
+      });
+    });
+    Object.keys(spine.close).forEach(step => {
+      const el = document.querySelector('[data-close="' + step + '"]');
+      if (el) el.textContent = spine.close[step];
     });
   }).catch(() => {});
 

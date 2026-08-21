@@ -91,6 +91,8 @@ def speaker(message):
         return "ITS STANDING BRIEF — the rules, your style, what it remembers"
     if role == "assistant":
         return "THE MODEL SAID"
+    if text == OPENING:
+        return "THE CODE OPENED THE SESSION — you never typed this"
     if text == NUDGE:
         return "THE CODE SENT IT BACK — you never saw this"
     if text.startswith("[") and text.endswith("]"):
@@ -176,6 +178,44 @@ WHERE = {
     "loop": "A step in the loop — it runs inside a lap, whenever the lap needs it.",
     "edge": "Not a step in the loop. It touches every turn from the side.",
     "unbuilt": "Not built, and that is a decision rather than an oversight.",
+}
+
+# --- one session, and what survives it -------------------------------------
+# The three edge layers are the hardest part of the stack to picture, because
+# nothing in a single turn shows how they bear on each other. They meet in one
+# place — the close — and the order is the whole relationship:
+#
+#   L8 decides what the closing call may be shown,
+#   that one call produces both what L5 writes and what L9 proposes,
+#   L9's proposal reaches the file only if Kev approves it,
+#   and next session L1 gathers all three files back in.
+#
+# So it is said here, as data, rather than left to be worked out from three
+# chips sitting side by side. `stage` is to this what `where` is to LAYERS:
+# the page groups by it and knows nothing else.
+KEEPS = [
+    ("the conversation", "during", "in memory while the coach runs, gone when it stops"),
+    ("this turn's trace", "during", "in memory for one turn — it can carry off-record words"),
+    ("session-log.md", "close", "two or three sentences on what you worked through"),
+    ("stuck-patterns.md", "close", "where you stalled, and the question that moved you"),
+    ("instructions.md", "approve", "one line of coaching style, added or swapped"),
+]
+
+STAGES = {
+    "during": "While it runs — nothing has reached the disk yet",
+    "close": "Written when you end the session",
+    "approve": "Written only if you press Approve",
+}
+
+# The steps between those groups: who acts, and what they act on.
+CLOSE = {
+    "gate": "off-record turns stop here — the closing call is never shown them",
+    "call": "one last call to the model",
+    "draws": "drawing on the whole session, minus anything off the record",
+    "keeps": "whatever it judged worth keeping",
+    "proposes": "one change to how it coaches — yours to approve or veto",
+    "back": "next session, it gathers all three files back in before the first "
+            "question — which is how any of this changes what the coach says",
 }
 
 # --- L0: inference ---------------------------------------------------------
@@ -355,8 +395,13 @@ You ask questions. You do not answer them. You never give advice, options,
 reassurance, or a summary that does his thinking for him. If you catch
 yourself about to be helpful in that way, ask instead.
 
-ONE question per turn. Short. Ask about the thing being avoided rather than
-the thing being presented.
+ONE question per turn. Short. Once he has given you something to work with,
+ask about the thing being avoided rather than the thing being presented.
+
+Your first question of a session is an invitation, not a diagnosis. You know
+nothing about today yet, so there is nothing yet to be avoided: ask what
+brought him here, in a way he would want to answer. Never open by presuming
+he is avoiding, stuck, or hiding something.
 
 Reply with a single JSON object and nothing else — no markdown, no code
 fences, no words outside the braces. Exactly one of these two shapes:
@@ -374,6 +419,15 @@ The tools you may ask for:
 # asks for good behaviour; this plus the checker in L4 is what enforces it.
 NUDGE = ('That was not a question, and you may only ask. Reply with a single '
          'JSON object: {"ask": "one short question"}')
+
+# The turn that opens a session. Kev types nothing to start one, so the code
+# types for him — which makes the framing of the first question a decision made
+# here, not a mood the model happened to be in. Opening with "what are you
+# avoiding?" reads as an accusation, and the model has nothing to base it on
+# yet: on turn one there is no conversation to have avoided anything in.
+OPENING = ("Open the session. He has just sat down and you know nothing about "
+           "today yet, so ask what brought him here — an invitation he would "
+           "want to answer. Do not ask what he is avoiding.")
 
 # The closing call. Runs once, at the end, and produces everything that
 # survives the session: what to remember (L5) and what to become (L9).
@@ -734,12 +788,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif self.path == "/build":
             self._send(200, json.dumps({"build": build_id(), "model": MODEL}))
         elif self.path == "/stack":
-            # The spine, as data. The page draws it and knows nothing else
-            # about agents — the stack is defined here, where it's real.
-            self._send(200, json.dumps([
-                {"id": i, "name": n, "where": w, "sits": WHERE[w],
-                 "does": p, "note": d}
-                for i, n, w, p, d in LAYERS]))
+            # The spine, as data, and the session alongside it. The page draws
+            # both and knows nothing else about agents — the stack is defined
+            # here, where it's real.
+            self._send(200, json.dumps({
+                "layers": [{"id": i, "name": n, "where": w, "sits": WHERE[w],
+                            "does": p, "note": d}
+                           for i, n, w, p, d in LAYERS],
+                "keeps": [{"what": w, "stage": s, "note": d}
+                          for w, s, d in KEEPS],
+                "stages": STAGES,
+                "close": CLOSE,
+            }))
         else:
             self._send(404, "not found", "text/plain")
 
@@ -751,8 +811,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             if self.path == "/say":
                 said = self._body().get("said", "").strip()
-                remember(STATE, {"role": "user", "content": said or
-                                 "Open the session. Ask your first question."})
+                remember(STATE, {"role": "user", "content": said or OPENING})
                 move = take_turn(STATE, trace)
                 ledger(STATE, trace)
                 self._send(200, json.dumps({**move, "trace": trace}))

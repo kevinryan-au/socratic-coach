@@ -163,6 +163,41 @@ with no box of its own — the code that actually runs what the model asked for.
 the panel comes from the `LAYERS` table in `coach.py`; the page decides where it goes, never
 what it says.
 
+### One session, and what survives it
+
+The loop answers "what happens when I press Send". Underneath it is the other timescale —
+what happens to any of it afterwards, which is the only place the three layers that *aren't*
+steps in the loop can be seen acting on each other:
+
+```
+  WHILE IT RUNS — nothing has reached the disk yet
+    the conversation    in memory while the coach runs, gone when it stops
+    this turn's trace   in memory for one turn — it can carry off-record words
+        │
+    ↓  L8   off-record turns stop here — the closing call is never shown them
+        │
+  L0  one last call to the model
+      drawing on the whole session, minus anything off the record
+        │                                    │
+    ↓  L5  whatever it judged worth      ↓  L9  one change to how it coaches —
+           keeping                              yours to approve or veto
+        │                                    │
+  WRITTEN WHEN YOU END THE SESSION       WRITTEN ONLY IF YOU PRESS APPROVE
+    session-log.md                         instructions.md
+    stuck-patterns.md
+        │
+    ↓  L1   next session, it gathers all three files back in before the first
+            question — which is how any of this changes what the coach says
+```
+
+That order *is* the relationship between the three. L8 decides what the closing call may be
+shown; that one call produces both what L5 writes and what L9 proposes; L9's proposal only
+reaches the file if I approve it; and L1 gathers all three back in next time, which is the
+only route by which any of it changes a question the coach asks. Three chips sitting in a row
+could never say that — the whole content is the order they act in.
+
+The tags are handles too: click `L8` or `L5` there and the same panel opens.
+
 The bottom half is one line per turn — the route that turn actually took:
 
 ```
