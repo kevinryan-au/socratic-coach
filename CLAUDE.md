@@ -122,6 +122,21 @@ his "Second Loop" essay concept — say so at the moment it happens.
 double-clickable (chmod +x; handle Gatekeeper if it complains).
 ✅ Done when: laptop-open → double-click → thinking with the coach in under ten seconds.
 
+There are now two launchers — `Coach.app` (the one he double-clicks) and `Start
+Coach.command` (the same thing with the lid off) — and both pull before starting. Two
+rules hold in both, and both were once true of only one of them:
+
+- **`memory/instructions.md` is set aside before the pull and handed back after.** It is
+  the one tracked file the coach rewrites (L9), so an update that touched it would be
+  refused, and the better the coach got at improving itself the more stuck it would be.
+  A copy, never a stash — a stash can come back as conflict markers in the middle of the
+  coaching style, which the coach would then read out as its own instructions.
+- **A refused update says so, and says why.** Silence and success used to print the same
+  line, which is exactly how the guard above went missing from one launcher for four
+  builds without anyone noticing.
+
+Change one launcher, change both.
+
 ## Technical notes
 
 - Endpoint: `POST https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/ai/run/{MODEL}`

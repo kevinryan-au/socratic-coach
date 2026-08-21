@@ -276,11 +276,17 @@ approve an L9 edit, and git won't update a folder with a tracked file sitting di
 second loop working was quietly what stopped new builds arriving; the coach improving
 itself was the reason it could never be improved.
 
-The launcher now copies that file aside, updates, and puts it back. If an update ever
-changes the starter style too, mine wins outright: the version in the repo is a seed, mine
-is what the sessions have shaped. Any *other* tracked file being edited by hand still stops
-the update and says so — an unexplained change to the program should be announced, not
-quietly pocketed.
+Both launchers copy that file aside, update, and put it back. If an update ever changes the
+starter style too, mine wins outright: the version in the repo is a seed, mine is what the
+sessions have shaped. Any *other* tracked file being edited by hand still stops the update
+and says so — an unexplained change to the program should be announced, not quietly
+pocketed.
+
+*Both* is load-bearing, and was wrong for four builds. `Coach.app` got the guard; `Start
+Coach.command`, which is meant to be the same thing with the lid off, didn't — so the one
+you can read was the one that would quietly stop updating. The guard is written out in
+full in each, rather than shared between them, because each launcher has to be readable on
+its own: change one, change both.
 
 ## What stays on this Mac
 
