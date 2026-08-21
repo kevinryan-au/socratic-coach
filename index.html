@@ -93,8 +93,12 @@
     font-size: .66rem; font-weight: 750; letter-spacing: .1em;
     text-transform: uppercase; color: var(--muted); margin: 0 0 6px;
   }
+  /* It keeps its natural height while there's room, and gives some back —
+     scrolling inside itself — when there isn't, so the turns below never get
+     squeezed to nothing by a drawing that has grown an open panel under it. */
   #loop {
-    flex: none; padding: 18px 20px 14px; border-bottom: 1px solid var(--line);
+    flex: 0 1 auto; min-height: 0; overflow-y: auto;
+    padding: 18px 20px 14px; border-bottom: 1px solid var(--line);
   }
   /* Wide enough and the drawing sits beside its explanations rather than on
      top of them, which keeps the turns below in view. Narrow, they stack. */
@@ -117,6 +121,9 @@
 
   /* the drawing */
   .n rect { fill: #fff; stroke: var(--line); stroke-width: 1; }
+  .n { cursor: pointer; }
+  .n:focus { outline: none; }
+  .n:focus-visible rect { stroke: var(--accent); stroke-width: 2; }
   .n .nid {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 11px; font-weight: 700; fill: var(--muted);
@@ -139,12 +146,15 @@
   .why-row {
     display: flex; gap: 8px; align-items: baseline; padding: 2px 0;
     font-size: .75rem; line-height: 1.45; color: var(--muted); opacity: .6;
+    width: 100%; text-align: left; font-family: inherit;
+    background: none; border: 0; border-radius: 6px; cursor: pointer;
   }
   .why-row.lit { opacity: 1; color: var(--accent); font-weight: 600; }
   .why-row .mk { flex: none; width: 1.1em; text-align: center; }
 
   #edges { display: flex; flex-direction: column; gap: 4px; }
   .chip {
+    font: inherit; text-align: left; cursor: pointer;
     font-size: .74rem; line-height: 1.4; padding: 5px 10px; border-radius: 8px;
     border: 1px solid var(--line); background: #fff; color: var(--muted);
   }
@@ -156,6 +166,46 @@
   #unbuilt {
     font-size: .72rem; line-height: 1.5; color: #a3a099; font-style: italic;
   }
+  #unbuilt button {
+    font: inherit; color: inherit; text-align: left; width: 100%;
+    background: none; border: 0; padding: 1px 0; cursor: pointer;
+  }
+
+  /* --- open a layer up ------------------------------------------------- */
+  /* Everything in the drawing answers to a click. The panel is one at a time
+     and lives under the picture, so reading about a box never scrolls the box
+     itself out of view. Every word in it comes from coach.py. */
+  .why-row:hover, .chip:hover, #unbuilt button:hover { color: var(--ink); }
+  .why-row.open, .chip.open, #unbuilt button.open { color: var(--ink); }
+  .chip.open { border-color: var(--muted); }
+  .n.open rect { fill: #f2fbfd; stroke: var(--ink); stroke-width: 1.4; }
+  .loop-hint {
+    font-size: .72rem; color: var(--muted); font-style: italic; margin: -2px 0 8px;
+  }
+  #explain {
+    position: relative; margin: 12px 0 0; padding: 12px 34px 12px 14px;
+    background: #fff; border: 1px solid var(--line); border-radius: 10px;
+    max-height: 30vh; overflow-y: auto;
+  }
+  #explain[hidden] { display: none; }
+  #explain .ex-id {
+    margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .72rem; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--accent);
+  }
+  #explain .ex-does {
+    margin: 3px 0 0; font-size: .95rem; font-weight: 600; letter-spacing: -.01em;
+  }
+  #explain .ex-sits, #explain .ex-note {
+    margin: 7px 0 0; font-size: .8rem; line-height: 1.5; color: var(--muted);
+  }
+  #explain .ex-sits { font-style: italic; }
+  #explain .ex-x {
+    position: absolute; top: 6px; right: 8px; font: inherit; font-size: 1rem;
+    line-height: 1; color: var(--muted); background: none; border: 0;
+    padding: 4px 6px; cursor: pointer;
+  }
+  #explain .ex-x:hover { color: var(--ink); }
 
   /* one line per turn, the path it actually took */
   #traces { flex: 1; overflow-y: auto; padding: 12px 20px 24px; min-height: 0; }
@@ -257,6 +307,7 @@
   <aside id="rail">
     <div id="loop">
       <p class="rail-h">One turn, through the loop</p>
+      <p class="loop-hint">Click any box or label to read what it is.</p>
       <div class="loop-cols">
       <!--
         The boxes and arrows are this file's business; what the layers are and
@@ -279,7 +330,7 @@
         <text class="ends" x="242" y="13" text-anchor="middle">you type a reply</text>
         <path class="edge" d="M242,20 V32" marker-end="url(#ah)"/>
 
-        <g class="n" id="n-L1">
+        <g class="n" id="n-L1" data-layer="L1" role="button" tabindex="0">
           <rect x="132" y="34" width="220" height="46" rx="8"/>
           <text class="nid" x="146" y="55">L1</text>
           <text class="ndoes" x="172" y="55" data-does="L1"></text>
@@ -287,7 +338,7 @@
         </g>
         <path class="edge" d="M242,80 V96" marker-end="url(#ah)"/>
 
-        <g class="n" id="n-L0">
+        <g class="n" id="n-L0" data-layer="L0" role="button" tabindex="0">
           <rect x="132" y="98" width="220" height="46" rx="8"/>
           <text class="nid" x="146" y="119">L0</text>
           <text class="ndoes" x="172" y="119" data-does="L0"></text>
@@ -295,7 +346,7 @@
         </g>
         <path class="edge" d="M242,144 V160" marker-end="url(#ah)"/>
 
-        <g class="n" id="n-L4">
+        <g class="n" id="n-L4" data-layer="L4" role="button" tabindex="0">
           <rect x="132" y="162" width="220" height="46" rx="8"/>
           <text class="nid" x="146" y="183">L4</text>
           <text class="ndoes" x="172" y="183" data-does="L4"></text>
@@ -315,7 +366,7 @@
         <path class="edge" id="edge-out" d="M242,208 V240" marker-end="url(#ah)"/>
         <text class="elabel" x="250" y="228">✓ it did ask something</text>
 
-        <g class="n" id="n-L2">
+        <g class="n" id="n-L2" data-layer="L2" role="button" tabindex="0">
           <rect x="132" y="242" width="220" height="46" rx="8"/>
           <text class="nid" x="146" y="263">L2</text>
           <text class="ndoes" x="172" y="263" data-does="L2"></text>
@@ -328,20 +379,35 @@
       <div class="loop-side">
         <p class="side-h">Why it goes round again</p>
         <div id="why">
-          <div class="why-row" id="why-nudge">
+          <!-- Each reason is the work of a layer, so each opens that layer:
+               the check that sends a statement back is L4, and the code that
+               actually runs a tool is L3 — the one loop step with no box. -->
+          <button type="button" class="why-row" id="why-nudge" data-layer="L4">
             <span class="mk">✗</span>
             <span>it stated instead of asking, so the code sent it back</span>
-          </div>
-          <div class="why-row" id="why-tool">
+          </button>
+          <button type="button" class="why-row" id="why-tool" data-layer="L3">
             <span class="mk">⚙</span>
             <span>it asked to use a tool, so the code ran it and went again</span>
-          </div>
+          </button>
         </div>
 
         <p class="side-h">Not steps in the loop, but they touch it</p>
         <div id="edges"></div>
         <div id="unbuilt"></div>
       </div>
+      </div>
+
+      <!-- One layer at a time, opened by clicking it. Every word in here
+           arrives from /stack — the page decides where it goes, not what it
+           says. -->
+      <div id="explain" hidden>
+        <button type="button" class="ex-x" id="explain-x"
+                title="close" aria-label="Close">×</button>
+        <p class="ex-id"></p>
+        <p class="ex-does"></p>
+        <p class="ex-sits"></p>
+        <p class="ex-note"></p>
       </div>
     </div>
 
@@ -399,6 +465,9 @@
   const edgesEl = document.getElementById('edges');
   const unbuiltEl = document.getElementById('unbuilt');
   const tracesEl = document.getElementById('traces');
+  const loopEl = document.getElementById('loop');
+  const explainEl = document.getElementById('explain');
+  const LAYER = {};   // id -> everything coach.py says about that layer
   let turnNo = 0;
 
   // Which box in the drawing a layer lights. Anything not named here lights a
@@ -409,24 +478,22 @@
     // The boxes are drawn here but worded there: plain phrase on top, the
     // proper name underneath, both straight out of coach.py.
     stack.forEach(l => {
+      LAYER[l.id] = l;
       const does = document.querySelector('[data-does="' + l.id + '"]');
       if (does) does.textContent = l.does;
       const name = document.querySelector('[data-name="' + l.id + '"]');
       if (name) name.textContent = l.name.toLowerCase();
       const box = document.getElementById('n-' + l.id);
-      if (box) {
-        const tip = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-        tip.textContent = l.note;
-        box.appendChild(tip);
-      }
+      if (box) box.setAttribute('aria-label', 'Open ' + l.id + ' ' + l.name);
     });
 
     edgesEl.textContent = '';
     stack.filter(l => l.where === 'edge').forEach(l => {
-      const chip = document.createElement('span');
+      const chip = document.createElement('button');
+      chip.type = 'button';
       chip.className = 'chip';
       chip.id = 'chip-' + l.id;
-      chip.title = l.note;
+      chip.dataset.layer = l.id;
       const tag = document.createElement('b');
       tag.textContent = l.id + ' ' + l.name;
       chip.append(tag, document.createTextNode(' — ' + l.does));
@@ -437,12 +504,62 @@
     // says why in words — an absence you can read is a decision.
     unbuiltEl.textContent = '';
     stack.filter(l => l.where === 'unbuilt').forEach(l => {
-      const row = document.createElement('div');
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.dataset.layer = l.id;
       row.textContent = l.id + ' ' + l.name.toLowerCase() + ' — could '
         + l.does + ', but doesn\'t: ' + l.note;
       unbuiltEl.appendChild(row);
     });
   }).catch(() => {});
+
+  // --- opening a layer up ---------------------------------------------------
+  // A box, a chip, an unbuilt line and a reason-it-went-round are all handles
+  // on the same thing: a layer. Clicking any of them opens that layer's own
+  // words underneath. One at a time, and clicking it again closes it.
+  let opened = null;
+
+  function shut() {
+    explainEl.hidden = true;
+    opened = null;
+    loopEl.querySelectorAll('.open').forEach(el => el.classList.remove('open'));
+  }
+
+  function openLayer(id) {
+    const l = LAYER[id];
+    if (!l) return;
+    if (opened === id) { shut(); return; }
+    shut();
+    opened = id;
+    explainEl.querySelector('.ex-id').textContent = l.id + ' · ' + l.name;
+    explainEl.querySelector('.ex-does').textContent = l.does;
+    explainEl.querySelector('.ex-sits').textContent = l.sits || '';
+    explainEl.querySelector('.ex-note').textContent = l.note;
+    explainEl.hidden = false;
+    // Every handle on that layer marks itself, not only the one clicked —
+    // that's how you find out the tool reason and L3 are the same thing.
+    loopEl.querySelectorAll('[data-layer="' + id + '"]')
+      .forEach(el => el.classList.add('open'));
+    // On a narrow window the drawing and its labels stack, and the panel can
+    // open below the fold — bring it to where the click was.
+    explainEl.scrollIntoView({ block: 'nearest' });
+  }
+
+  loopEl.addEventListener('click', e => {
+    const handle = e.target.closest && e.target.closest('[data-layer]');
+    if (handle) openLayer(handle.dataset.layer);
+  });
+
+  // The chips and the lines are real buttons and need nothing more; the boxes
+  // are SVG groups, so Enter and Space have to be spelled out for them.
+  loopEl.addEventListener('keydown', e => {
+    const handle = e.target.closest && e.target.closest('[data-layer]');
+    if (!handle || handle.tagName === 'BUTTON') return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLayer(handle.dataset.layer); }
+  });
+
+  document.getElementById('explain-x').addEventListener('click', shut);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') shut(); });
 
   function pulse(el) {
     if (!el) return;

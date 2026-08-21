@@ -65,6 +65,64 @@ def count(n, word):
     return f"{n:,} {word}" if n == 1 else f"{n:,} {word}s"
 
 
+# --- writing the details so they can be read -------------------------------
+# A detail is the actual thing — the whole context that went out, the file as
+# rewritten. Accurate and unreadable is still unreadable: a JSON dump with the
+# line breaks escaped is a wall nobody gets through, and a wall nobody gets
+# through teaches nothing. So details are laid out as text a person reads,
+# with the content itself passed through untouched.
+RULE = "─" * 44
+
+
+def figures(pairs):
+    """A small column of label-and-number. Numbers are for comparing, so they
+    line up; the sentence beside the layer stays a sentence."""
+    width = max((len(label) for label, _ in pairs), default=0)
+    return "\n".join(f"  {label.ljust(width)}   {value}" for label, value in pairs)
+
+
+def speaker(message):
+    """Who is talking, in the words of the person watching. Two of these are
+    not really 'you' at all — the nudge and a tool's result go in as your turn,
+    but they are the code talking, and saying so is half of what the panel is
+    for. NUDGE is defined further down; nothing calls this before then."""
+    role, text = message["role"], message["content"]
+    if role == "system":
+        return "ITS STANDING BRIEF — the rules, your style, what it remembers"
+    if role == "assistant":
+        return "THE MODEL SAID"
+    if text == NUDGE:
+        return "THE CODE SENT IT BACK — you never saw this"
+    if text.startswith("[") and text.endswith("]"):
+        return "WHAT THE TOOL HANDED BACK — the code talking, not you"
+    return "YOU SAID"
+
+
+def as_fields(mapping):
+    """A small object as labelled lines, so a one-line note isn't wrapped in
+    braces and quotes to be read."""
+    return "\n\n".join(f"{key}:\n{value}" for key, value in mapping.items())
+
+
+def as_edit(edit):
+    """The proposed change to the coaching style, said rather than serialised.
+    This is the one thing the coach may do to itself, so it is the last place
+    that should be readable only if you know JSON."""
+    return figures([
+        ("take out", edit.get("remove") or "(nothing — it only adds a line)"),
+        ("put in", edit.get("add") or "(nothing)"),
+        ("because", edit.get("why") or "(it didn't say)"),
+    ])
+
+
+def as_read(messages):
+    """The whole context, in the order it was sent, under headings that say who
+    is speaking. Every character is the one the model got — this only adds the
+    headings between them."""
+    return "\n\n".join(
+        f"{RULE}\n{speaker(m)}\n{RULE}\n{m['content'].strip()}" for m in messages)
+
+
 # --- the spine -------------------------------------------------------------
 # The stack itself, as data, so the page can draw it without knowing anything
 # about agents. Each row: the number, the proper name, where it sits, what it
@@ -110,6 +168,15 @@ LAYERS = [
      "Only when a session ends, and only if you press Approve. This is the "
      "one way the coach is allowed to alter itself."),
 ]
+
+# What "where it sits" means, said in full. The panel shows this when you open
+# a layer up, so the three words above stop being jargon the moment you ask.
+# Same rule as everywhere else: the page draws, this file does the talking.
+WHERE = {
+    "loop": "A step in the loop — it runs inside a lap, whenever the lap needs it.",
+    "edge": "Not a step in the loop. It touches every turn from the side.",
+    "unbuilt": "Not built, and that is a decision rather than an oversight.",
+}
 
 # --- L0: inference ---------------------------------------------------------
 # Rented, stateless, and the only layer that isn't yours. Nothing is installed
@@ -362,22 +429,33 @@ def build_messages(session, trace=None):
               + stuck_tail)
     messages = [{"role": "system", "content": system}] + session
 
-    # The line says how big and out of what; the detail is the whole thing,
-    # verbatim. "What did it actually see?" should never need guessing at.
+    # The line names the parts; the detail carries the numbers and then the
+    # whole thing, verbatim. "What did it actually see?" should never need
+    # guessing at — but nor should it need reading past escaped line breaks.
     capped = [name for name, whole, tail
               in (("session-log", log, log_tail), ("stuck-patterns", stuck, stuck_tail))
               if len(whole) > len(tail)]
-    total = len(system) + sum(len(m["content"]) for m in session)
+    talk = sum(len(m["content"]) for m in session)
+    total = len(system) + talk
     note(trace, "L1", "gathered",
-         f"{total:,} characters for it to read — the rules it was given "
-         f"({len(CONSTITUTION):,}), your coaching style ({len(style):,}), what "
-         f"it remembers of past sessions ({len(log_tail):,}), where you tend to "
-         f"get stuck ({len(stuck_tail):,}), and "
+         f"{total:,} characters for it to read — its rules, your coaching "
+         "style, what it remembers, and "
          + count(len(session), "message") + " of today's conversation"
-         + (f". Only the most recent {MEMORY_TAIL:,} characters of "
-            f"{' and '.join(capped)} fit — the rest is out of reach"
-            if capped else ""),
-         json.dumps(messages, indent=2))
+         + (". Some of what it remembers didn't fit" if capped else ""),
+         f"WHAT IT COULD SEE — {total:,} characters in all\n\n"
+         + figures([
+             ("the rules it was given", f"{len(CONSTITUTION):,}"),
+             ("your coaching style", f"{len(style):,}"),
+             ("what it remembers of past sessions", f"{len(log_tail):,}"),
+             ("where you tend to get stuck", f"{len(stuck_tail):,}"),
+             ("today's conversation", f"{talk:,}   ({count(len(session), 'message')})"),
+         ])
+         + (f"\n\nOnly the most recent {MEMORY_TAIL:,} characters of "
+            f"{' and '.join(capped)} fit. The rest is out of reach — it is on "
+            "the disk, but not in front of the model."
+            if capped else "")
+         + "\n\nBelow is that text exactly as it was sent, in order.\n\n"
+         + as_read(messages))
     return messages
 
 
@@ -496,7 +574,7 @@ def take_turn(state, trace=None):
         note(trace, "L2", "asked for",
              f"instead of a question it asked to use {name}. Asking is all it "
              "can do — the code decides whether anything happens",
-             json.dumps(move.get("args", {}), indent=2))
+             as_fields(move.get("args", {})) or "it passed nothing with it")
         result = run_tool(name, move.get("args", {}), state, trace)
         remember(state, {"role": "user", "content": f"[{name}: {result}]"})
         if name == "end_session":
@@ -575,7 +653,7 @@ def close_session(state, trace=None):
          "one change to its own coaching style. Nothing happens to the file "
          "until you press Approve"
          if edit.get("add") else "no change to how it coaches, this time",
-         json.dumps(edit, indent=2) if edit else "")
+         as_edit(edit) if edit.get("add") else "")
     return {"summary": summary, "wrote": wrote, "edit": edit,
             "off_record": state["off_record"],
             "style": read_file(STYLE)}
@@ -659,7 +737,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # The spine, as data. The page draws it and knows nothing else
             # about agents — the stack is defined here, where it's real.
             self._send(200, json.dumps([
-                {"id": i, "name": n, "where": w, "does": p, "note": d}
+                {"id": i, "name": n, "where": w, "sits": WHERE[w],
+                 "does": p, "note": d}
                 for i, n, w, p, d in LAYERS]))
         else:
             self._send(404, "not found", "text/plain")

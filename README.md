@@ -155,6 +155,14 @@ goes round again, and the layers that touch a turn without being steps in it —
 every turn, L5 and L9 only at the close. L6 and L7 are named and greyed with their reason.
 An absence you can see is a decision; an absence you can't is an oversight.
 
+**Click any of it and it opens up.** A box, a chip, an unbuilt line, a reason it went round
+again — each is a handle on one layer, and clicking it puts that layer's own words underneath
+the drawing: what it does, whether it's a step in the loop or something touching it from the
+side, and why that matters. Clicking the tool reason opens L3, which is the one loop step
+with no box of its own — the code that actually runs what the model asked for. Every word in
+the panel comes from the `LAYERS` table in `coach.py`; the page decides where it goes, never
+what it says.
+
 The bottom half is one line per turn — the route that turn actually took:
 
 ```
@@ -176,10 +184,8 @@ costs a lap.
 **Click any turn** and the full trace opens underneath: every layer, in order, saying what it
 did in a sentence, in plain words rather than in the vocabulary of the code —
 
-> **L1 gathered** — 4,668 characters for it to read: the rules it was given (808), your
-> coaching style (760), what it remembers of past sessions (2,500), where you tend to get
-> stuck (308), and 9 messages of today's conversation. Only the most recent 2,500 characters
-> of session-log fit — the rest is out of reach.
+> **L1 gathered** — 4,668 characters for it to read — its rules, your coaching style, what it
+> remembers, and 9 messages of today's conversation. Some of what it remembers didn't fit.
 >
 > **L4 sent back** — that was a statement, not a question. Sending it back to try again —
 > attempt 1 of 2. You never saw the reply below; the code caught it first.
@@ -187,6 +193,25 @@ did in a sentence, in plain words rather than in the vocabulary of the code —
 Any of those lines with a `⌄` opens further — click `L1` and you get the entire context that
 went to the model, verbatim, every character it could see before it wrote a word. Click `L0`
 and you get the raw reply, before anything parsed it.
+
+It opens as something to read rather than something to decode: the sizes first, in a column
+where they can be compared —
+
+```
+WHAT IT COULD SEE — 4,668 characters in all
+
+  the rules it was given               808
+  your coaching style                  760
+  what it remembers of past sessions  2,500
+  where you tend to get stuck          308
+  today's conversation                 300   (9 messages)
+```
+
+— and then the whole thing, in order, each message under a heading saying who was speaking:
+its standing brief, what I said, what the model said, and the lines the *code* put in that I
+never saw — the nudge, and what a tool handed back. That last distinction is the one the old
+format hid worst. It used to be a JSON dump with every line break written out as `\n`, which
+was accurate and unreadable, and a dump nobody reads teaches nothing.
 
 Two of those lines are worth watching in particular:
 

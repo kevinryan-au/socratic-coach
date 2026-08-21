@@ -160,6 +160,14 @@ instrumentation *of* the layers.
   what it does on top, the proper name underneath, both from `LAYERS`.
 - Give it the room. The conversation is one question at a time and needs far less width
   than the works do; the panel takes about half the window when it's showing.
+- **Every part of the drawing opens.** A box, a chip, an unbuilt line and a reason-it-went-
+  round are all handles on one layer; clicking any of them shows that layer's own words —
+  `does`, `sits`, `note`, all from `LAYERS`. One at a time, under the drawing. A tooltip
+  isn't enough: it can't be reached by keyboard, can't be read twice, and vanishes.
+- **A detail is for reading, not decoding.** The whole context, the raw reply, the file as
+  rewritten — laid out as text with headings that say who was speaking, never a JSON dump
+  with the line breaks escaped. The content itself is passed through untouched; accurate and
+  unreadable is still unreadable.
 - The trace is **RAM for one turn, then gone**. Never a file, never a log, never
   localStorage. While off-record the transcript is still sent to the model, so it appears in
   the L1 detail — persisting the trace anywhere would be a hole straight through L8's
